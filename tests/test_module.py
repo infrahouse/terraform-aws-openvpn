@@ -24,13 +24,13 @@ def test_module(service_network):
         fp.write(
             dedent(
                 f"""
-                    region = "{REGION}"
-                    role_arn = "{TEST_ROLE_ARN}"
-                    test_zone = "{TEST_ZONE}"
+                region             = "{REGION}"
+                role_arn           = "{TEST_ROLE_ARN}"
+                test_zone          = "{TEST_ZONE}"
 
-                    lb_subnet_ids = {json.dumps(subnet_public_ids)}
-                    backend_subnet_ids = {json.dumps(subnet_private_ids)}
-                    """
+                lb_subnet_ids      = {json.dumps(subnet_public_ids)}
+                backend_subnet_ids = {json.dumps(subnet_private_ids)}
+                """
             )
         )
 

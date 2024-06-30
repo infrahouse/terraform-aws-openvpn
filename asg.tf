@@ -24,6 +24,7 @@ module "userdata" {
     {
       openvpn : {
         ca_key_passphrase_secret : module.ca_passkey.secret_name
+        openvpn_port: local.openvpn_tcp_port
       }
     },
     {
@@ -76,10 +77,6 @@ resource "aws_autoscaling_group" "openvpn" {
   target_group_arns = [
     aws_lb_target_group.openvpn.arn
   ]
-
-  lifecycle {
-    create_before_destroy = true
-  }
   instance_refresh {
     strategy = "Rolling"
     preferences {
@@ -99,7 +96,4 @@ resource "aws_autoscaling_group" "openvpn" {
       value               = tag.value
     }
   }
-}
-
-locals {
 }

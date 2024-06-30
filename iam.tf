@@ -1,14 +1,25 @@
-data "aws_iam_policy_document" "required_permissions" {
+data "aws_iam_policy_document" "instance_permissions" {
   statement {
-    actions = ["sts:GetCallerIdentity"]
+    actions   = ["sts:GetCallerIdentity"]
+    resources = ["*"]
+  }
+  statement {
+    actions = [
+      "ec2:DescribeInstances",
+      "ec2:ModifyInstanceAttribute"
+    ]
     resources = [
       "*"
     ]
+    condition {
+      test     = "StringEquals"
+      values = [
+        aws_autoscaling_group.openvpn.name
+      ]
+      variable = "ec2:ResourceTag/aws:autoscaling:groupName"
+    }
   }
-}
 
-resource "aws_iam_policy" "required" {
-  policy = data.aws_iam_policy_document.required_permissions.json
 }
 
 resource "random_string" "profile-suffix" {
@@ -22,10 +33,6 @@ module "instance_profile" {
   permissions  = data.aws_iam_policy_document.instance_permissions.json
   profile_name = "openvpn-${random_string.profile-suffix.result}"
   extra_policies = merge(
-    {
-      required : aws_iam_policy.required.arn
-    },
     var.extra_policies
   )
 }
-

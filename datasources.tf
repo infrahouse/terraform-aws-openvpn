@@ -44,13 +44,6 @@ data "aws_route53_zone" "current" {
   zone_id  = var.zone_id
 }
 
-data "aws_iam_policy_document" "instance_permissions" {
-  statement {
-    actions   = ["sts:GetCallerIdentity"]
-    resources = ["*"]
-  }
-}
-
 data "aws_vpc" "selected" {
   id = data.aws_subnet.selected.vpc_id
 }

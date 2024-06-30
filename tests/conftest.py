@@ -13,7 +13,7 @@ TEST_ACCOUNT = "303467602807"
 TEST_ROLE_ARN = "arn:aws:iam::303467602807:role/openvpn-tester"
 DEFAULT_PROGRESS_INTERVAL = 10
 TRACE_TERRAFORM = False
-DESTROY_AFTER = True
+DESTROY_AFTER = False
 UBUNTU_CODENAME = "jammy"
 
 LOG = logging.getLogger(__name__)
@@ -102,9 +102,9 @@ def ses(boto3_session):
         fp.write(
             dedent(
                 f"""
-                role_arn = "{TEST_ROLE_ARN}"
+                role_arn  = "{TEST_ROLE_ARN}"
                 test_zone = "{TEST_ZONE}"
-                region = "{REGION}"
+                region    = "{REGION}"
                 """
             )
         )
