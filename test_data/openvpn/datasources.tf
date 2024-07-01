@@ -7,3 +7,7 @@ data "aws_availability_zones" "available" {
 data "aws_route53_zone" "test-zone" {
   name = var.test_zone
 }
+
+data "aws_vpc" "mgmt" {
+  id = var.vpc_id
+}

@@ -10,9 +10,13 @@ module "userdata" {
   puppet_module_path       = var.puppet_module_path
   puppet_root_directory    = var.puppet_root_directory
   puppet_manifest          = var.puppet_manifest
+  pre_runcmd = [
+    "aws ec2 modify-instance-attribute --no-source-dest-check --instance-id $(ec2metadata --instance-id)"
+  ]
   packages = concat(
     var.packages,
     [
+      "awscli",
       "nfs-common"
     ]
   )
@@ -24,7 +28,8 @@ module "userdata" {
     {
       openvpn : {
         ca_key_passphrase_secret : module.ca_passkey.secret_name
-        openvpn_port: local.openvpn_tcp_port
+        openvpn_port : local.openvpn_tcp_port
+        routes : var.routes
       }
     },
     {

@@ -155,6 +155,19 @@ variable "puppet_root_directory" {
   default     = "/opt/puppet-code"
 }
 
+variable "routes" {
+  description = "List of network/netmasks in format 10.x.x.x/255.x.x.x that need to be pushed to a client. [{network: \"10.0.0.0\", netmask: \"255.0.0.0\"}]"
+  type = list(
+    object(
+      {
+        network : string,
+        netmask : string
+      }
+    )
+  )
+  default = []
+}
+
 variable "service_name" {
   description = "DNS hostname for the service. It's also used to name some resources like EC2 instances."
   default     = "openvpn"

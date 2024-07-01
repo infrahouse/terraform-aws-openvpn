@@ -24,6 +24,7 @@ module "openvpn-portal" {
   task_min_count                            = 1
   task_max_count                            = 1
   asg_min_size                              = 1
+  asg_max_size                              = 1
   asg_instance_type                         = "t3.small" # 2vCPU, 2GB RAM
   container_cpu                             = 400        # One vCPU is 1024
   container_memory                          = 400        # Value in MB
@@ -53,6 +54,14 @@ module "openvpn-portal" {
         name : "GOOGLE_OAUTH_CLIENT_SECRET_NAME",
         value : module.google_client.secret_name
       },
+      {
+        name : "OPENVPN_HOSTNAME",
+        value : aws_route53_record.vpn_cname.fqdn
+      },
+      {
+        name : "OPENVPN_PORT",
+        value : local.openvpn_tcp_port
+      }
     ]
   )
   task_role_arn = aws_iam_role.openvpn_portal_role.arn

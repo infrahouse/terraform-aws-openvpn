@@ -6,20 +6,27 @@ data "aws_iam_policy_document" "instance_permissions" {
   statement {
     actions = [
       "ec2:DescribeInstances",
+    ]
+    resources = [
+      "*"
+    ]
+
+  }
+  statement {
+    actions = [
       "ec2:ModifyInstanceAttribute"
     ]
     resources = [
       "*"
     ]
     condition {
-      test     = "StringEquals"
+      test = "StringEquals"
       values = [
         aws_autoscaling_group.openvpn.name
       ]
       variable = "ec2:ResourceTag/aws:autoscaling:groupName"
     }
   }
-
 }
 
 resource "random_string" "profile-suffix" {

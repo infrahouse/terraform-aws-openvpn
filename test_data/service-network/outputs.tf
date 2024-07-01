@@ -9,3 +9,7 @@ output "subnet_private_ids" {
 output "internet_gateway_id" {
   value = module.service-network.internet_gateway_id
 }
+
+output "vpc_id" {
+  value = module.service-network.vpc_id
+}

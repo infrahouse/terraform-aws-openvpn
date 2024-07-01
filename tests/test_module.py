@@ -18,6 +18,7 @@ from tests.conftest import (
 def test_module(service_network):
     subnet_public_ids = service_network["subnet_public_ids"]["value"]
     subnet_private_ids = service_network["subnet_private_ids"]["value"]
+    vpc_id = service_network["vpc_id"]["value"]
 
     terraform_module_dir = osp.join(TERRAFORM_ROOT_DIR, "openvpn")
     with open(osp.join(terraform_module_dir, "terraform.tfvars"), "w") as fp:
@@ -30,6 +31,7 @@ def test_module(service_network):
 
                 lb_subnet_ids      = {json.dumps(subnet_public_ids)}
                 backend_subnet_ids = {json.dumps(subnet_private_ids)}
+                vpc_id             = "{vpc_id}"
                 """
             )
         )
