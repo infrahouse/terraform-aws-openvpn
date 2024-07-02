@@ -60,35 +60,9 @@ def index():
         LOG.debug("get('/oauth2/v2/userinfo') = %s", resp.text)
         email = resp.json()["email"]
         name = resp.json()["name"]
-        picture = resp.json()["picture"]
 
-        # Generate certificate if doesn't exist
+        # Generate a certificate if it doesn't exist
         ensure_certificate(openvpn_config_directory, email)
-        requested_profile = request.args.get("profile", None)
-
-        openvpn_hostname = environ["OPENVPN_HOSTNAME"]
-
-        if requested_profile:
-            if requested_profile != f"{email}.ovpn":
-                abort(403)
-
-            file_obj = BytesIO()
-            file_obj.write(
-                generate_profile(
-                    openvpn_config_directory,
-                    email,
-                    openvpn_hostname,
-                    environ["OPENVPN_PORT"],
-                ).encode()
-            )
-            file_obj.seek(0)  # Reset file pointer to beginning
-
-            return send_file(
-                file_obj,
-                mimetype="application/x-openvpn-profile",
-                as_attachment=True,
-                download_name=f"{email}-{openvpn_hostname}.ovpn",
-            )
 
         return dedent(
             f"""
@@ -96,7 +70,7 @@ def index():
                 Logged as {name}&lt;{email}&gt;.
             </p>
             <p>
-            Download your <a href="?profile={email}.ovpn">OpenVPN profile</a>.
+            Download your <a href="/profile">OpenVPN profile</a>.
             </p>
             <p>
                 <a href="/logout">Logout</a>
@@ -105,6 +79,37 @@ def index():
         )
     except TokenExpiredError:
         return redirect(url_for("google.login"))
+
+
+@app.route("/profile")
+def profile():
+    LOG.debug("google.authorized = %s", google.authorized)
+    if not google.authorized:
+        return redirect(url_for("google.login"))
+
+    openvpn_hostname = environ["OPENVPN_HOSTNAME"]
+    resp = google.get("/oauth2/v2/userinfo")
+    assert resp.ok, resp.text
+    LOG.debug("get('/oauth2/v2/userinfo') = %s", resp.text)
+    email = resp.json()["email"]
+
+    file_obj = BytesIO()
+    file_obj.write(
+        generate_profile(
+            openvpn_config_directory,
+            email,
+            openvpn_hostname,
+            environ["OPENVPN_PORT"],
+        ).encode()
+    )
+    file_obj.seek(0)  # Reset file pointer to beginning
+
+    return send_file(
+        file_obj,
+        mimetype="application/x-openvpn-profile",
+        as_attachment=True,
+        download_name=f"{email}-{openvpn_hostname}.ovpn",
+    )
 
 
 @app.route("/login/google")
@@ -156,7 +161,7 @@ def generate_client_key(config_dir, email):
     )
     # Sign the client request
     check_call(
-        [EASY_RSA, f"--vars={config_dir}/vars", "sign-req", email],
+        [EASY_RSA, f"--vars={config_dir}/vars", "sign-req", "client", email],
         env={"EASYRSA_PASSIN": f"file:{openvpn_config_directory}/ca_passphrase"},
         cwd=config_dir,
     )
