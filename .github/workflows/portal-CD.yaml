@@ -42,7 +42,7 @@ jobs:
           REGISTRY_ALIAS: "infrahouse"
           REPOSITORY: "openvpn-portal"
           IMAGE_TAG: "latest"
-        working-directory: "poral"
+        working-directory: "portal"
         run: |
           docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
