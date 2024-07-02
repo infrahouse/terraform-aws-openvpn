@@ -109,6 +109,7 @@ variable "lb_subnet_ids" {
 
 variable "portal-image" {
   description = "OpenVPN portal docker image"
+  default     = "public.ecr.aws/infrahouse/openvpn-portal:latest"
 }
 
 variable "packages" {

@@ -13,7 +13,7 @@ TEST_ACCOUNT = "303467602807"
 TEST_ROLE_ARN = "arn:aws:iam::303467602807:role/openvpn-tester"
 DEFAULT_PROGRESS_INTERVAL = 10
 TRACE_TERRAFORM = False
-DESTROY_AFTER = False
+DESTROY_AFTER = True
 UBUNTU_CODENAME = "jammy"
 
 LOG = logging.getLogger(__name__)
