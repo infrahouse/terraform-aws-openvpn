@@ -1,0 +1,48 @@
+---
+name: Build and Push Images to AWS ECR
+
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write  # This is required for aws oidc connection
+  contents: read   # This is required for actions/checkout
+
+env:
+  AWS_REGION: us-east-1
+  ROLE_ARN: "arn:aws:iam::493370826424:role/ih-tf-terraform-aws-openvpn-github"
+
+jobs:
+  build-and-push-image:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          role-session-name: github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+
+      - name: Build, tag, and push docker image to Amazon ECR Public
+        env:
+          REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+          REGISTRY_ALIAS: "infrahouse"
+          REPOSITORY: "openvpn-portal"
+          IMAGE_TAG: "latest"
+        working-directory: "poral"
+        run: |
+          docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG

@@ -1,0 +1,5 @@
+black ~= 24.3
+boto3 ~= 1.26
+infrahouse-toolkit ~= 2.0
+pytest ~= 8.2
+requests ~= 2.31
