@@ -14,6 +14,7 @@ module "openvpn" {
   key_pair_name                = aws_key_pair.mediapc.key_name
   asg_min_size                 = 1
   asg_max_size                 = 1
+  portal-image                 = "303467602807.dkr.ecr.us-east-2.amazonaws.com/portal:latest"
   google_oauth_client_writer   = "arn:aws:iam::303467602807:role/aws-reserved/sso.amazonaws.com/us-west-1/AWSReservedSSO_AWSAdministratorAccess_422821c726d81c14"
   alb_access_log_force_destroy = true
   routes = [

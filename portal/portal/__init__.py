@@ -10,7 +10,7 @@ from textwrap import dedent
 import boto3
 import requests
 from asgiref.wsgi import WsgiToAsgi
-from flask import Flask, redirect, url_for, session, abort, request, send_file
+from flask import Flask, redirect, url_for, session, abort, request, send_file, send_from_directory
 from flask_dance.contrib.google import make_google_blueprint, google
 from infrahouse_toolkit.cli.ih_secrets.cmd_get import get_secret
 from infrahouse_toolkit.logging import setup_logging
@@ -25,7 +25,7 @@ setup_logging(LOG, debug=DEBUG)
 
 aws_client = boto3.client("secretsmanager")
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="assets")
 app.wsgi_app = ProxyFix(app.wsgi_app)
 app.secret_key = get_secret(aws_client, environ["FLASK_SECRET_KEY"])
 google_oauth_client_secret_value = json.loads(
@@ -64,19 +64,7 @@ def index():
         # Generate a certificate if it doesn't exist
         ensure_certificate(openvpn_config_directory, email)
 
-        return dedent(
-            f"""
-            <p>
-                Logged as {name}&lt;{email}&gt;.
-            </p>
-            <p>
-            Download your <a href="/profile">OpenVPN profile</a>.
-            </p>
-            <p>
-                <a href="/logout">Logout</a>
-            </p>
-            """
-        )
+        return index_page(name, email)
     except TokenExpiredError:
         return redirect(url_for("google.login"))
 
@@ -153,11 +141,19 @@ def status():
     return "OK"
 
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+
 def generate_client_key(config_dir, email):
     # Generate request
     check_call(
         [EASY_RSA, f"--vars={config_dir}/vars", "gen-req", email, "nopass"],
         cwd=config_dir,
+        env={
+            "EASYRSA_REQ_CN": email
+        }
     )
     # Sign the client request
     check_call(
@@ -205,3 +201,68 @@ auth SHA256
 # Verbosity level
 verb 3
 """
+
+
+def index_page(name, email):
+    domain = email.split("@")[1]
+    return dedent(
+        f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>OpenVPN Portal: {domain}</title>
+            <link rel="icon" href="/favicon.ico?v=3" />
+            <style>
+                th, td {{
+                    border-style: groove;
+                }}
+            </style>
+        </head>
+        <body>
+            <h1>Welcome to {domain} OpenVPN Portal</h1>
+            <p>
+                Logged as {name}&lt;{email}&gt;. <a href="/logout">Logout</a>
+            </p>
+            <h2>VPN client setup instructions</h2>
+            <p><b>Step 1</b>: Download the client app</p>
+            <table>
+                <tr>
+                    <th>MacOS</th><th>Windows</th><th>Other</th>
+                </tr>
+                <tr>
+                    <td>
+                        <p><a href="https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg">MacOS Installer</a></p>
+                        <p>
+                            <a href="https://openvpn.net/client-connect-vpn-for-mac-os/">
+                            Installation instructions and alternative versions
+                            </a>
+                        </p>
+                    </td>
+                    <td>
+                        <p>
+                            <a href="https://openvpn.net/downloads/openvpn-connect-v3-windows.msi">
+                            Windows Installer
+                            </a>
+                        </p>
+                        <p>
+                            <a href="https://openvpn.net/client-connect-vpn-for-windows/">
+                            Installation instructions and alternative versions
+                            </a>
+                        </p>
+                    </td>
+
+                    </td>
+                    <td><a href="https://openvpn.net/client/">Other OS-es</a></td>
+                </tr>
+            </table>
+            <p>
+            <b>Step 2</b>: Download your <a href="/profile">OpenVPN profile</a>.
+            </p>
+            <p>
+            <b>Step 3</b>: Find the profile in the file manager and open it. Follow the onscreen instructions.
+        </body>
+        </html>
+        """
+    )
