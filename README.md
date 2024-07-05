@@ -2,7 +2,7 @@
 The [openvpn module](https://registry.terraform.io/modules/infrahouse/openvpn/aws/latest) deploys an OpenVPN server 
 with Google OAuth2.0 authentication.
 
-![OpenVPN diagram](/assets/openvpn.drawio.png)
+![OpenVPN diagram](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvpn.drawio.png)
 
 OpenVPN Portal is a web application. It authenticates users by their Google account and generates 
 an OpenVPN profile for them.
@@ -37,12 +37,12 @@ Our VPN setup will consist of two components: OpenVPN server and OpenVPN Portal
 
 The OpenVPN server is deployed on an autoscale group and fronted by a network load balancer.
 
-![openvp-server](assets/openvp-server.drawio.png)
+![openvp-server](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvp-server.drawio.png)
 
 The OpenVPN Portal is a Web application deployed as an AWS ECS service. 
 It talks to Google to authenticate users and distributes OpenVPN profiles needed to configure a client application. 
 
-![openvp-portal](assets/openvp-portal.drawio.png)
+![openvp-portal](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvp-portal.drawio.png)
 
 All module variables here are required. Let's go over them.
 
@@ -115,13 +115,13 @@ https://github.com/infrahouse/aws-control-493370826424/pull/199
 Now, the [pull request](https://github.com/infrahouse/aws-control-493370826424/pull/199) successfully ran `terraform plan` 
 and we can review what Terraform is going to do.
 
-![terraform-plan.png](assets/terraform-plan.png)
+![terraform-plan.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/terraform-plan.png)
 
 Normally, the module will create about 80 resources. In my case, all of them start with a "module.vnp", 
 which is a good indicator Terraform will create resources that we expect it to do.
 If your plan includes resources to be changed or destroyed - double-check the STDOUT to understand what's going on.
 
-![terraform-plan-stdout.png](assets/terraform-plan-stdout.png)
+![terraform-plan-stdout.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/terraform-plan-stdout.png)
 
 ### **Step 3**: Merge the pull request.
 ```shell
@@ -143,14 +143,14 @@ Fast-forward
 ```
 [Check](https://github.com/infrahouse/aws-control-493370826424/pull/199) that Terraform successfully created the VPN resources.
 
-![pr-deploy.png](assets/pr-deploy.png)
+![pr-deploy.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/pr-deploy.png)
 
 ### **Step 4**: Configure Google OAuth2.0.
 
 Now if you open https://openvpn-portal.infrahouse.com/ in a browser, you'll see a 502 error.
 It's because I didn't update Google Client credentials. So, let's remedy that.
 
-![502.png](assets/502.png)
+![502.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/502.png)
 
 This is a Google client secret that Terraform created.
 ```shell
@@ -166,25 +166,25 @@ NoValue
 
 Open [Google Cloud Console](https://console.cloud.google.com/) and create an OpenVPN project.
 
-![gc-1.png](assets/gc-1.png)
+![gc-1.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-1.png)
 
 Next, go to "Credentials". 
 
-![gc-2.png](assets/gc-2.png)
+![gc-2.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-2.png)
 
 Next, Create OAuth client ID. Note, authentication requests will come from https://openvpn-portal.infrahouse.com,
 so I added it to "Authorized JavaScript origins". Another important setting is "Authorized redirect URIs".
 It must be https://openvpn-portal.infrahouse.com/login/google/authorized. For your domain it will be something like
 https://openvpn-portal.my-domain.com/login/google/authorized.
 
-![img.png](assets/gc-3.png)
+![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-3.png)
 
 #### **Step 4.2**: Download OAuth 2.0 credentials.
 
 After you press a create button, you'll see a confirmation screen with a DOWNLOAD JSON link. 
 Click it and save the file.
 
-![img.png](assets/gc-04.png)
+![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-04.png)
 
 #### **Step 4.3**: Update Google OAuth Client ID secret value.
 
@@ -228,14 +228,14 @@ When you open https://openvpn-portal.infrahouse.com/ again, it will present a Go
 After a successful authentication, the portal will show a page with OpenVPN client instructions.
 
 
-![img.png](assets/portal-start-page.png)
+![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/portal-start-page.png)
 
 ### **Step 6**: Install OpenVPN client.
 
 The portal has links to an installer for MacOS and Windows. For other OS-es you can go to https://openvpn.net/client/
 and download the client from there.
 
-![img.png](assets/openvpn-download-page.png)
+![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvpn-download-page.png)
 
 ### **Step 6**: Download and import OpenVPN profile.
 
@@ -245,13 +245,13 @@ on your laptop.
 Double-click on the `aleks@infrahouse.com-openvpn.infrahouse.com.ovpn` file. It will open the client and suggest 
 to import the profile.
 
-![img.png](assets/import-profile-page.png)
+![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/import-profile-page.png)
 
 ### **Step 7**: Connect to VPN.
 
 | Original Image                            |    | Transformed Image                            |
 |-------------------------------------------|----|----------------------------------------------|
-| ![img.png](assets/connect-page.png)       | ➡️ | ![img.png](connected-page.png)               |
+| ![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/connect-page.png)       | ➡️ | ![img.png](connected-page.png)               |
 
 
 ### **Step 8**: Check network connectivity with the VPN server.
