@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-
+ENV WORKERS 4
 RUN apt-get update && \
     apt-get install -y --no-install-recommends easy-rsa && \
     apt-get clean && \
@@ -12,4 +12,4 @@ RUN apt-get update && \
 
 COPY . .
 
-CMD [ "uvicorn", "portal:asgi_app", "--host", "0.0.0.0", "--workers", "4", "--port", "8080"]
+CMD uvicorn portal:asgi_app --host 0.0.0.0 --workers $WORKERS --port 8080

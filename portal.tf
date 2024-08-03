@@ -25,7 +25,7 @@ module "openvpn-portal" {
   task_max_count                            = 1
   asg_min_size                              = 1
   asg_max_size                              = 1
-  asg_instance_type                         = "t3.small" # 2vCPU, 2GB RAM
+  asg_instance_type                         = var.portal_instance_type
   container_cpu                             = 400        # One vCPU is 1024
   container_memory                          = 400        # Value in MB
   alb_access_log_force_destroy              = var.alb_access_log_force_destroy

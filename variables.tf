@@ -118,6 +118,12 @@ variable "packages" {
   default     = []
 }
 
+variable "portal_instance_type" {
+  description = "AWS instance type for the portal service"
+  type = string
+  default = "t3.small"
+}
+
 variable "puppet_custom_facts" {
   description = "A map of custom puppet facts"
   type        = any
