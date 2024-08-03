@@ -1,6 +1,6 @@
 module "openvpn-portal" {
   source  = "registry.infrahouse.com/infrahouse/ecs/aws"
-  version = "3.1.1"
+  version = "3.2.0"
   providers = {
     aws     = aws
     aws.dns = aws.dns
@@ -25,9 +25,9 @@ module "openvpn-portal" {
   task_max_count                            = 1
   asg_min_size                              = 1
   asg_max_size                              = 1
-  asg_instance_type                         = "t3.small" # 2vCPU, 2GB RAM
-  container_cpu                             = 400        # One vCPU is 1024
-  container_memory                          = 400        # Value in MB
+  asg_instance_type                         = var.portal_instance_type
+  container_cpu                             = 400 # One vCPU is 1024
+  container_memory                          = 200 # Value in MB
   alb_access_log_force_destroy              = var.alb_access_log_force_destroy
   task_efs_volumes = {
     data : {
@@ -61,6 +61,10 @@ module "openvpn-portal" {
       {
         name : "OPENVPN_PORT",
         value : local.openvpn_tcp_port
+      },
+      {
+        name : "WORKERS",
+        value : var.portal_workers_count
       }
     ]
   )

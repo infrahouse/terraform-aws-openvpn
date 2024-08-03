@@ -17,6 +17,8 @@ module "openvpn" {
   portal-image                 = "303467602807.dkr.ecr.us-east-2.amazonaws.com/portal:latest"
   google_oauth_client_writer   = "arn:aws:iam::303467602807:role/aws-reserved/sso.amazonaws.com/us-west-1/AWSReservedSSO_AWSAdministratorAccess_422821c726d81c14"
   alb_access_log_force_destroy = true
+  portal_workers_count         = 1
+  portal_instance_type         = "t3a.nano"
   routes = [
     {
       network : cidrhost(data.aws_vpc.mgmt.cidr_block, 0)
