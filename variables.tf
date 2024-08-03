@@ -120,8 +120,14 @@ variable "packages" {
 
 variable "portal_instance_type" {
   description = "AWS instance type for the portal service"
-  type = string
-  default = "t3.small"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "portal_workers_count" {
+  description = "Number of unicorn workers in OpenVPN portal"
+  type        = number
+  default     = 4
 }
 
 variable "puppet_custom_facts" {

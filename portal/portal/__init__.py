@@ -10,7 +10,16 @@ from textwrap import dedent
 import boto3
 import requests
 from asgiref.wsgi import WsgiToAsgi
-from flask import Flask, redirect, url_for, session, abort, request, send_file, send_from_directory
+from flask import (
+    Flask,
+    redirect,
+    url_for,
+    session,
+    abort,
+    request,
+    send_file,
+    send_from_directory,
+)
 from flask_dance.contrib.google import make_google_blueprint, google
 from infrahouse_toolkit.cli.ih_secrets.cmd_get import get_secret
 from infrahouse_toolkit.logging import setup_logging
@@ -141,9 +150,11 @@ def status():
     return "OK"
 
 
-@app.route('/favicon.ico')
+@app.route("/favicon.ico")
 def favicon():
-    return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+    return send_from_directory(
+        app.static_folder, "favicon.ico", mimetype="image/vnd.microsoft.icon"
+    )
 
 
 def generate_client_key(config_dir, email):
@@ -151,9 +162,7 @@ def generate_client_key(config_dir, email):
     check_call(
         [EASY_RSA, f"--vars={config_dir}/vars", "gen-req", email, "nopass"],
         cwd=config_dir,
-        env={
-            "EASYRSA_REQ_CN": email
-        }
+        env={"EASYRSA_REQ_CN": email},
     )
     # Sign the client request
     check_call(
