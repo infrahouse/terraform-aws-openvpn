@@ -11,7 +11,7 @@ module "openvpn-portal" {
   load_balancer_subnets                     = var.lb_subnet_ids
   asg_subnets                               = var.backend_subnet_ids
   zone_id                                   = data.aws_route53_zone.current.zone_id
-  dns_names                                 = ["openvpn-portal"]
+  dns_names                                 = ["${var.service_name}-portal"]
   internet_gateway_id                       = data.aws_internet_gateway.current.id
   ssh_key_name                              = local.key_pair_name
   container_port                            = 8080

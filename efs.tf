@@ -1,8 +1,8 @@
 resource "aws_efs_file_system" "openvpn-config" {
-  creation_token = "openvpn-config"
+  creation_token = "${var.service_name}-config"
   tags = merge(
     {
-      Name = "openvpn-config"
+      Name = "${var.service_name}-config"
     },
     local.tags
   )
