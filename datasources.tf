@@ -54,3 +54,12 @@ data "aws_internet_gateway" "current" {
     values = [data.aws_vpc.selected.id]
   }
 }
+
+data "aws_ami" "selected" {
+  filter {
+    name = "image-id"
+    values = [
+      var.asg_ami
+    ]
+  }
+}
