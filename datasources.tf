@@ -59,7 +59,7 @@ data "aws_ami" "selected" {
   filter {
     name = "image-id"
     values = [
-      var.asg_ami
+      var.asg_ami == null ? data.aws_ami.ubuntu.id : var.asg_ami
     ]
   }
 }
