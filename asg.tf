@@ -54,6 +54,13 @@ resource "aws_launch_template" "openvpn" {
   iam_instance_profile {
     arn = module.instance_profile.instance_profile_arn
   }
+  block_device_mappings {
+    device_name = data.aws_ami.selected.root_device_name
+    ebs {
+      volume_size           = var.root_volume_size
+      delete_on_termination = true
+    }
+  }
   user_data = module.userdata.userdata
   vpc_security_group_ids = [
     aws_security_group.openvpn.id

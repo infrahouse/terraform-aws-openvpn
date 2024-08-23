@@ -168,6 +168,12 @@ variable "puppet_root_directory" {
   default     = "/opt/puppet-code"
 }
 
+variable "root_volume_size" {
+  description = "Root volume size in EC2 instance in Gigabytes"
+  type        = number
+  default     = 30
+}
+
 variable "routes" {
   description = "List of network/netmasks in format 10.x.x.x/255.x.x.x that need to be pushed to a client. [{network: \"10.0.0.0\", netmask: \"255.0.0.0\"}]"
   type = list(
