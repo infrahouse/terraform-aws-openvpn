@@ -14,7 +14,6 @@ module "openvpn-portal" {
   dns_names                                 = ["${var.service_name}-portal"]
   internet_gateway_id                       = data.aws_internet_gateway.current.id
   ssh_key_name                              = local.key_pair_name
-  ssh_cidr_block                            = data.aws_vpc.selected.cidr_block
   container_port                            = 8080
   container_healthcheck_command             = "curl -sf http://localhost:8080/status || exit 1"
   service_health_check_grace_period_seconds = 300
