@@ -9,6 +9,6 @@ resource "aws_key_pair" "deployer" {
     {
       service : var.service_name
     },
-    local.tags
+    local.default_module_tags
   )
 }
