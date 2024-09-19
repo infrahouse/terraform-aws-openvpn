@@ -4,7 +4,7 @@ resource "aws_efs_file_system" "openvpn-config" {
     {
       Name = "${var.service_name}-config"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -29,7 +29,7 @@ resource "aws_security_group" "efs" {
     {
       Name : "OpenVPN config"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -43,7 +43,7 @@ resource "aws_vpc_security_group_ingress_rule" "efs" {
   tags = merge({
     Name = "NFS traffic"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -58,7 +58,7 @@ resource "aws_vpc_security_group_ingress_rule" "efs_icmp" {
     {
       Name = "ICMP traffic"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -70,6 +70,6 @@ resource "aws_vpc_security_group_egress_rule" "efs" {
     {
       Name = "EFS outgoing traffic"
     },
-    local.tags
+    local.default_module_tags
   )
 }

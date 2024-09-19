@@ -5,7 +5,7 @@ resource "aws_security_group" "openvpn" {
   tags = merge({
     Name : "openvpn"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -19,7 +19,7 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
   tags = merge({
     Name = "SSH access"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -34,7 +34,7 @@ resource "aws_vpc_security_group_ingress_rule" "openvpn" {
     {
       Name = "OpenVPN access"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -49,7 +49,7 @@ resource "aws_vpc_security_group_ingress_rule" "icmp" {
     {
       Name = "ICMP traffic"
     },
-    local.tags
+    local.default_module_tags
   )
 }
 
@@ -62,6 +62,6 @@ resource "aws_vpc_security_group_egress_rule" "default" {
     {
       Name = "outgoing traffic"
     },
-    local.tags
+    local.default_module_tags
   )
 }
