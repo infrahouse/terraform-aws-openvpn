@@ -92,12 +92,13 @@ locals {
 }
 
 resource "aws_autoscaling_group" "openvpn" {
-  name                  = local.asg_name
-  max_size              = var.asg_max_size == null ? length(var.backend_subnet_ids) + 1 : var.asg_max_size
-  min_size              = var.asg_min_size == null ? length(var.backend_subnet_ids) : var.asg_min_size
-  vpc_zone_identifier   = var.backend_subnet_ids
-  health_check_type     = "ELB"
-  max_instance_lifetime = 90 * 24 * 3600
+  name                      = local.asg_name
+  max_size                  = var.asg_max_size == null ? length(var.backend_subnet_ids) + 1 : var.asg_max_size
+  min_size                  = var.asg_min_size == null ? length(var.backend_subnet_ids) : var.asg_min_size
+  vpc_zone_identifier       = var.backend_subnet_ids
+  health_check_type         = "ELB"
+  health_check_grace_period = 900
+  max_instance_lifetime     = 90 * 24 * 3600
   dynamic "launch_template" {
     for_each = var.on_demand_base_capacity == null ? [1] : []
     content {
