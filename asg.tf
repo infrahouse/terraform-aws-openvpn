@@ -96,10 +96,29 @@ resource "aws_autoscaling_group" "openvpn" {
   max_size              = var.asg_max_size == null ? length(var.backend_subnet_ids) + 1 : var.asg_max_size
   min_size              = var.asg_min_size == null ? length(var.backend_subnet_ids) : var.asg_min_size
   vpc_zone_identifier   = var.backend_subnet_ids
+  health_check_type     = "ELB"
   max_instance_lifetime = 90 * 24 * 3600
-  launch_template {
-    id      = aws_launch_template.openvpn.id
-    version = aws_launch_template.openvpn.latest_version
+  dynamic "launch_template" {
+    for_each = var.on_demand_base_capacity == null ? [1] : []
+    content {
+      id      = aws_launch_template.openvpn.id
+      version = aws_launch_template.openvpn.latest_version
+    }
+  }
+  dynamic "mixed_instances_policy" {
+    for_each = var.on_demand_base_capacity == null ? [] : [1]
+    content {
+      instances_distribution {
+        on_demand_base_capacity                  = var.on_demand_base_capacity
+        on_demand_percentage_above_base_capacity = 0
+      }
+      launch_template {
+        launch_template_specification {
+          launch_template_id = aws_launch_template.openvpn.id
+          version            = aws_launch_template.openvpn.latest_version
+        }
+      }
+    }
   }
   target_group_arns = [
     aws_lb_target_group.openvpn.arn

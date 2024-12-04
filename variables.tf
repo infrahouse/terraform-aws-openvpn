@@ -107,6 +107,12 @@ variable "lb_subnet_ids" {
   type        = list(string)
 }
 
+variable "on_demand_base_capacity" {
+  description = "If specified, the ASG will request spot instances and this will be the minimal number of on-demand instances."
+  type        = number
+  default     = null
+}
+
 variable "portal-image" {
   description = "OpenVPN portal docker image"
   default     = "public.ecr.aws/infrahouse/openvpn-portal:latest"
