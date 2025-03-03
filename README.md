@@ -482,3 +482,4 @@ rtt min/avg/max/mdev = 7.285/7.285/7.285/0.000 ms
 | Name | Description |
 |------|-------------|
 | <a name="output_google_client_secret"></a> [google\_client\_secret](#output\_google\_client\_secret) | google\_client secret name. OpenVPN portal admin must update the secret with a Google OAuth client JSON. |
+| <a name="output_load_balancer_arn"></a> [load\_balancer\_arn](#output\_load\_balancer\_arn) | ARN of the load balancer for the OpenVPN portal. |

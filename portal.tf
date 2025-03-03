@@ -1,6 +1,6 @@
 module "openvpn-portal" {
   source  = "registry.infrahouse.com/infrahouse/ecs/aws"
-  version = "3.14.0"
+  version = "5.3.0"
   providers = {
     aws     = aws
     aws.dns = aws.dns
@@ -17,9 +17,9 @@ module "openvpn-portal" {
   container_port                            = 8080
   container_healthcheck_command             = "curl -sf http://localhost:8080/status || exit 1"
   service_health_check_grace_period_seconds = 300
-  alb_healthcheck_path                      = "/status"
-  alb_healthcheck_response_code_matcher     = "200"
-  alb_idle_timeout                          = 600
+  healthcheck_path                          = "/status"
+  healthcheck_response_code_matcher         = "200"
+  idle_timeout                              = 600
   task_desired_count                        = 1
   task_min_count                            = 1
   task_max_count                            = 1
@@ -29,7 +29,7 @@ module "openvpn-portal" {
   asg_instance_type                         = var.portal_instance_type
   container_cpu                             = 400 # One vCPU is 1024
   container_memory                          = 200 # Value in MB
-  alb_access_log_force_destroy              = var.alb_access_log_force_destroy
+  access_log_force_destroy                  = var.alb_access_log_force_destroy
   task_efs_volumes = {
     data : {
       file_system_id : aws_efs_file_system.openvpn-config.id
