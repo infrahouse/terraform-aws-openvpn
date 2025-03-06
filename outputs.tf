@@ -7,3 +7,8 @@ output "load_balancer_arn" {
   description = "ARN of the load balancer for the OpenVPN portal"
   value       = module.openvpn-portal.load_balancer_arn
 }
+
+output "autoscaling_group_name" {
+  description = "Autoscaling group name."
+  value       = aws_autoscaling_group.openvpn.name
+}
