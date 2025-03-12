@@ -210,6 +210,38 @@ variable "ubuntu_codename" {
   default     = "jammy"
 }
 
+variable "users" {
+  description = "A list of maps with user definitions according to the cloud-init format"
+  default     = null
+  type        = any
+  # Check https://cloudinit.readthedocs.io/en/latest/reference/examples.html#including-users-and-groups
+  # for fields description and examples.
+  #   type = list(
+  #     object(
+  #       {
+  #         name : string
+  #         expiredate : optional(string)
+  #         gecos : optional(string)
+  #         homedir : optional(string)
+  #         primary_group : optional(string)
+  #         groups : optional(string) # Comma separated list of strings e.g. groups: users, admin
+  #         selinux_user : optional(string)
+  #         lock_passwd : optional(bool)
+  #         inactive : optional(number)
+  #         passwd : optional(string)
+  #         no_create_home : optional(bool)
+  #         no_user_group : optional(bool)
+  #         no_log_init : optional(bool)
+  #         ssh_import_id : optional(list(string))
+  #         ssh_authorized_keys : optional(list(string))
+  #         sudo : any # Can be either false or a list of strings e.g. sudo = ["ALL=(ALL) NOPASSWD:ALL"]
+  #         system : optional(bool)
+  #         snapuser : optional(string)
+  #       }
+  #     )
+  #   )
+}
+
 variable "zone_id" {
   description = "Domain name zone ID where the website will be available"
   type        = string

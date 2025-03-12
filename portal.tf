@@ -70,4 +70,5 @@ module "openvpn-portal" {
     ]
   )
   task_role_arn = aws_iam_role.openvpn_portal_role.arn
+  users         = var.users
 }
