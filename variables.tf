@@ -246,3 +246,9 @@ variable "zone_id" {
   description = "Domain name zone ID where the website will be available"
   type        = string
 }
+
+variable "sns_topic_alarm_arn" {
+  description = "ARN of SNS topic for Cloudwatch alarms on base EC2 instance."
+  type        = string
+  default     = null
+}
