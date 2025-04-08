@@ -11,8 +11,8 @@ locals {
     created_by_module : "infrahouse/openvpn/aws"
 
   }
-  openvpn_tcp_port         = 1194
-  key_pair_name            = var.key_pair_name == null ? aws_key_pair.deployer.key_name : var.key_pair_name
+  openvpn_tcp_port = 1194
+  key_pair_name    = var.key_pair_name == null ? aws_key_pair.deployer.key_name : var.key_pair_name
 
   ami_name_pattern = contains(
     ["focal", "jammy"], var.ubuntu_codename
