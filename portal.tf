@@ -1,6 +1,6 @@
 module "openvpn-portal" {
   source  = "registry.infrahouse.com/infrahouse/ecs/aws"
-  version = "5.3.0"
+  version = "5.7.1"
   providers = {
     aws     = aws
     aws.dns = aws.dns
@@ -30,6 +30,8 @@ module "openvpn-portal" {
   container_cpu                             = 400 # One vCPU is 1024
   container_memory                          = 200 # Value in MB
   access_log_force_destroy                  = var.alb_access_log_force_destroy
+
+  extra_instance_profile_permissions = var.extra_instance_profile_permissions
   task_efs_volumes = {
     data : {
       file_system_id : aws_efs_file_system.openvpn-config.id
