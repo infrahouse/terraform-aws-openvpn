@@ -258,3 +258,9 @@ variable "extra_instance_profile_permissions" {
   type        = string
   default     = null
 }
+
+variable "cloudinit_extra_commands" {
+  description = "Extra commands for run on ASG."
+  type        = list(string)
+  default     = []
+}
