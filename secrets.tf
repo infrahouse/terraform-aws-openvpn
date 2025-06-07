@@ -32,7 +32,7 @@ module "flask_secret_key" {
 
 module "google_client" {
   source             = "infrahouse/secret/aws"
-  version            = "0.5.0"
+  version            = "0.7.9"
   secret_description = "A JSON with Google OAuth Client ID"
   secret_name_prefix = "google_client"
   tags               = local.default_module_tags
