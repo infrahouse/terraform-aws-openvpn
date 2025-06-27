@@ -10,7 +10,12 @@ resource "aws_lb" "openvpn" {
   security_groups = [
     aws_security_group.openvpn.id
   ]
-  tags = local.default_module_tags
+  tags = merge(
+    local.default_module_tags,
+    {
+      module_version : local.module_version
+    }
+  )
 }
 
 resource "aws_lb_target_group" "openvpn" {
