@@ -38,7 +38,7 @@ resource "random_string" "profile-suffix" {
 
 module "instance_profile" {
   source       = "registry.infrahouse.com/infrahouse/instance-profile/aws"
-  version      = "1.4.0"
+  version      = "1.8.1"
   permissions  = data.aws_iam_policy_document.instance_permissions.json
   profile_name = "openvpn-${random_string.profile-suffix.result}"
   extra_policies = merge(
