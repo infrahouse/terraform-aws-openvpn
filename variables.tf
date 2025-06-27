@@ -166,7 +166,7 @@ variable "puppet_manifest" {
 
 variable "puppet_module_path" {
   description = "Path to common puppet modules."
-  default     = "{root_directory}/modules"
+  default     = "{root_directory}/environments/{environment}/modules:{root_directory}/modules"
 }
 
 variable "puppet_root_directory" {

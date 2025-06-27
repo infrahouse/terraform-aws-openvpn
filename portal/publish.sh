@@ -2,19 +2,24 @@
 
 set -eux
 
-export AWS_DEFAULT_REGION=us-east-2
+AWS_PROFILE="infrahouse-cicd-admin"
+AWS_DEFAULT_REGION="$(cat ../Makefile | grep -w "^TEST_REGION" | awk -F = '{ print $2 }' | sed 's/"//g')"
+export AWS_DEFAULT_REGION
 
-AWS_PROFILE="infrahouse-admin-cicd"
+eval "$(ih-aws --aws-region "$AWS_DEFAULT_REGION" --aws-profile "$AWS_PROFILE" credentials -e)"
 
-aws --profile $AWS_PROFILE sts get-caller-identity || aws --profile infrahouse-admin-cicd sso login
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity | jq -r .Account)
 
-aws --profile $AWS_PROFILE ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 303467602807.dkr.ecr.us-east-2.amazonaws.com
+#exit 0
+
+aws ecr get-login-password --region "$AWS_DEFAULT_REGION" \
+  | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
 docker build -t portal .
-docker tag portal:latest 303467602807.dkr.ecr.us-east-2.amazonaws.com/portal:latest
-docker push 303467602807.dkr.ecr.us-east-2.amazonaws.com/portal:latest
+docker tag portal:latest "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/portal:latest"
+docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/portal:latest"
 
 
-aws --profile $AWS_PROFILE ecs update-service --cluster openvpn-portal --service openvpn-portal --force-new-deployment > /dev/null
+aws ecs update-service --cluster openvpn-portal --service openvpn-portal --force-new-deployment > /dev/null
 echo "Restarting the portal service. Please wait..."
-aws --profile $AWS_PROFILE ecs wait services-stable --cluster openvpn-portal --services openvpn-portal
+aws ecs wait services-stable --cluster openvpn-portal --services openvpn-portal
 echo "done"

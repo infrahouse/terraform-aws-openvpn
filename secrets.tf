@@ -3,7 +3,8 @@ resource "random_password" "ca_passkey" {
 }
 module "ca_passkey" {
   source             = "registry.infrahouse.com/infrahouse/secret/aws"
-  version            = "0.5.0"
+  version            = "1.0.2"
+  environment        = var.environment
   secret_description = "OpenVPN CA Key Passphrase"
   secret_name_prefix = "openvpn_ca_passphrase"
   secret_value       = random_password.ca_passkey.result
@@ -20,7 +21,8 @@ resource "random_password" "flask_secret_key" {
 }
 module "flask_secret_key" {
   source             = "registry.infrahouse.com/infrahouse/secret/aws"
-  version            = "0.5.0"
+  version            = "1.0.2"
+  environment        = var.environment
   secret_description = "Flask secret key"
   secret_name_prefix = "flask_secret_key"
   secret_value       = random_password.flask_secret_key.result
@@ -32,7 +34,8 @@ module "flask_secret_key" {
 
 module "google_client" {
   source             = "infrahouse/secret/aws"
-  version            = "0.5.0"
+  version            = "1.0.2"
+  environment        = var.environment
   secret_description = "A JSON with Google OAuth Client ID"
   secret_name_prefix = "google_client"
   tags               = local.default_module_tags
