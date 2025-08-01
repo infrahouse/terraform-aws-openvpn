@@ -63,3 +63,7 @@ data "aws_ami" "selected" {
     ]
   }
 }
+
+data "aws_kms_key" "efs_default" {
+  key_id = "alias/aws/elasticfilesystem"
+}
