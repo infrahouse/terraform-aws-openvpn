@@ -35,7 +35,7 @@ module "openvpn-portal" {
   extra_instance_profile_permissions = var.extra_instance_profile_permissions
   task_efs_volumes = {
     data : {
-      file_system_id : aws_efs_file_system.openvpn-config.id
+      file_system_id : aws_efs_file_system.openvpn-config-enc.id
       container_path : "/etc/openvpn"
     }
   }
