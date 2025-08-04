@@ -21,8 +21,8 @@ from flask import (
     send_from_directory,
 )
 from flask_dance.contrib.google import make_google_blueprint, google
-from infrahouse_toolkit.cli.ih_secrets.cmd_get import get_secret
-from infrahouse_toolkit.logging import setup_logging
+from infrahouse_core.aws import get_secret
+from infrahouse_core.logging import setup_logging
 from oauthlib.oauth2 import TokenExpiredError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
