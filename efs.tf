@@ -1,25 +1,3 @@
-resource "aws_efs_file_system" "openvpn-config" {
-  creation_token = "${var.service_name}-config"
-  tags = merge(
-    {
-      Name = "${var.service_name}-config"
-    },
-    local.default_module_tags
-  )
-}
-
-resource "aws_efs_mount_target" "openvpn-config" {
-  for_each       = toset(var.backend_subnet_ids)
-  file_system_id = aws_efs_file_system.openvpn-config.id
-  subnet_id      = each.key
-  security_groups = [
-    aws_security_group.efs.id
-  ]
-  lifecycle {
-    create_before_destroy = false
-  }
-}
-
 resource "aws_security_group" "efs" {
   description = "Security group for EFS volume"
   name_prefix = "openvpn-efs-"
