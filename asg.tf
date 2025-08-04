@@ -35,8 +35,8 @@ module "userdata" {
     },
     {
       "efs" : {
-        "file_system_id" : aws_efs_file_system.openvpn-config.id
-        "dns_name" : aws_efs_file_system.openvpn-config.dns_name
+        "file_system_id" : aws_efs_file_system.openvpn-config-enc.id
+        "dns_name" : aws_efs_file_system.openvpn-config-enc.dns_name
       }
     },
     var.smtp_credentials_secret != null ? {
