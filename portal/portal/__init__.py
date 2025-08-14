@@ -27,9 +27,8 @@ from oauthlib.oauth2 import TokenExpiredError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 LOG = getLogger()
-DEBUG = environ.get("DEBUG").lower() == "true"
+DEBUG = environ.get("DEBUG", "false").lower() == "true"
 EASY_RSA = "/usr/share/easy-rsa/easyrsa"
-ALLOWED_DOMAINS = set(environ.get("ALLOWED_DOMAINS", "").split(";"))
 setup_logging(LOG, debug=DEBUG)
 
 
@@ -59,9 +58,17 @@ asgi_app = WsgiToAsgi(app)
 
 
 def authorize_email(email):
+    if "@" not in email:
+        LOG.warning("User with invalid email %s attempted to log in.", email)
+        abort(400, "Invalid email format")
+
+    allowed_domains = set(filter(None, environ.get("ALLOWED_DOMAINS", "").split(";")))
     domain = email.split("@")[-1].lower()
-    if domain not in ALLOWED_DOMAINS:
-        # Optionally log and revoke token; at minimum, deny.
+    if domain not in allowed_domains:
+        # Log out the user and respond the 403 code
+        LOG.warning(
+            "User %s from a not allowed domain %s attempted to log in.", email, domain
+        )
         session.clear()
         abort(403, f"Users from {domain} are not allowed.")
 
@@ -80,6 +87,7 @@ def index():
         name = resp.json()["name"]
 
         authorize_email(email)
+        LOG.info("User %s logged in.", email)
 
         # Generate a certificate if it doesn't exist
         ensure_certificate(openvpn_config_directory, email)

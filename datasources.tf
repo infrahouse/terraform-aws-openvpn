@@ -31,7 +31,7 @@ data "aws_ami" "ubuntu_pro" {
     ]
   }
 
-  owners = ["099720109477"] # Canonical
+  owners = [local.canonical_owner_id]
 }
 
 

@@ -15,5 +15,6 @@ locals {
   }
   openvpn_tcp_port     = 1194
   key_pair_name        = var.key_pair_name == null ? aws_key_pair.deployer.key_name : var.key_pair_name
+  canonical_owner_id   = "099720109477"
   ami_name_pattern_pro = "ubuntu-pro-server/images/hvm-ssd-gp3/ubuntu-${var.ubuntu_codename}-*"
 }
