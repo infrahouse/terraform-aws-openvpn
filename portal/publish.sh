@@ -14,10 +14,11 @@ AWS_ACCOUNT_ID=$(aws sts get-caller-identity | jq -r .Account)
 
 aws ecr get-login-password --region "$AWS_DEFAULT_REGION" \
   | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
-docker build -t portal .
-docker tag portal:latest "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/portal:latest"
-docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/portal:latest"
-
+docker buildx build \
+  --platform linux/amd64 \
+  -t "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/portal:latest" \
+  --push \
+  .
 
 aws ecs update-service --cluster openvpn-portal --service openvpn-portal --force-new-deployment > /dev/null
 echo "Restarting the portal service. Please wait..."

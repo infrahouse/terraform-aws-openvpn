@@ -12,11 +12,10 @@ data "aws_iam_policy_document" "instance_permissions" {
     resources = [
       "*"
     ]
-
   }
   statement {
     actions = [
-      "ec2:ModifyInstanceAttribute"
+      "ec2:ModifyInstanceAttribute",
     ]
     resources = [
       "*"
@@ -28,6 +27,14 @@ data "aws_iam_policy_document" "instance_permissions" {
       ]
       variable = "ec2:ResourceTag/aws:autoscaling:groupName"
     }
+  }
+  statement {
+    actions = [
+      "autoscaling:SetInstanceHealth",
+    ]
+    resources = [
+      "arn:aws:autoscaling:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.asg_name}"
+    ]
   }
 }
 
