@@ -3,6 +3,13 @@ variable "alb_access_log_force_destroy" {
   type        = bool
   default     = false
 }
+
+variable "allowed_domains" {
+  description = "List of domains, authenticated users of which will be allowed to connect to VPN. The domain passed via var.zone_id will be added to the list"
+  type        = list(string)
+  default     = []
+}
+
 variable "asg_ami" {
   description = "Image for EC2 instances"
   type        = string
@@ -205,9 +212,9 @@ variable "smtp_credentials_secret" {
 }
 
 variable "ubuntu_codename" {
-  description = "Ubuntu version to use for the elasticsearch node"
+  description = "Ubuntu version to use for the OpenVPN server EC2 instance"
   type        = string
-  default     = "jammy"
+  default     = "noble"
 }
 
 variable "users" {

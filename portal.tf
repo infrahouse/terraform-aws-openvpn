@@ -15,7 +15,7 @@ module "openvpn-portal" {
   internet_gateway_id                       = data.aws_internet_gateway.current.id
   ssh_key_name                              = local.key_pair_name
   container_port                            = 8080
-  container_healthcheck_command             = "curl -sf http://localhost:8080/status || exit 1"
+  container_healthcheck_command             = "/usr/bin/pkill -0 uvicorn || exit 1"
   service_health_check_grace_period_seconds = 300
   healthcheck_path                          = "/status"
   healthcheck_response_code_matcher         = "200"
@@ -43,8 +43,19 @@ module "openvpn-portal" {
   task_environment_variables = concat(
     [
       {
+        name : "ALLOWED_DOMAINS"
+        value : join(";",
+          concat(
+            var.allowed_domains,
+            [
+              data.aws_route53_zone.current.name
+            ]
+          )
+        )
+      },
+      {
         name : "DEBUG",
-        value : true,
+        value : false,
       },
       {
         name : "AWS_DEFAULT_REGION",

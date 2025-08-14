@@ -27,8 +27,9 @@ from oauthlib.oauth2 import TokenExpiredError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 LOG = getLogger()
-DEBUG = bool(environ.get("DEBUG"))
+DEBUG = environ.get("DEBUG").lower() == "true"
 EASY_RSA = "/usr/share/easy-rsa/easyrsa"
+ALLOWED_DOMAINS = set(environ.get("ALLOWED_DOMAINS", "").split(";"))
 setup_logging(LOG, debug=DEBUG)
 
 
@@ -57,6 +58,14 @@ app.register_blueprint(google_bp, url_prefix="/login")
 asgi_app = WsgiToAsgi(app)
 
 
+def authorize_email(email):
+    domain = email.split("@")[-1].lower()
+    if domain not in ALLOWED_DOMAINS:
+        # Optionally log and revoke token; at minimum, deny.
+        session.clear()
+        abort(403, f"Users from {domain} are not allowed.")
+
+
 @app.route("/")
 def index():
     LOG.debug("google.authorized = %s", google.authorized)
@@ -69,6 +78,8 @@ def index():
         LOG.debug("get('/oauth2/v2/userinfo') = %s", resp.text)
         email = resp.json()["email"]
         name = resp.json()["name"]
+
+        authorize_email(email)
 
         # Generate a certificate if it doesn't exist
         ensure_certificate(openvpn_config_directory, email)
@@ -162,12 +173,15 @@ def generate_client_key(config_dir, email):
     check_call(
         [EASY_RSA, f"--vars={config_dir}/vars", "gen-req", email, "nopass"],
         cwd=config_dir,
-        env={"EASYRSA_REQ_CN": email},
+        env={"EASYRSA_REQ_CN": email, "EASYRSA_REQ_SERIAL": "NA"},
     )
     # Sign the client request
     check_call(
         [EASY_RSA, f"--vars={config_dir}/vars", "sign-req", "client", email],
-        env={"EASYRSA_PASSIN": f"file:{openvpn_config_directory}/ca_passphrase"},
+        env={
+            "EASYRSA_PASSIN": f"file:{openvpn_config_directory}/ca_passphrase",
+            "EASYRSA_REQ_SERIAL": "NA",
+        },
         cwd=config_dir,
     )
 

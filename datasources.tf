@@ -6,12 +6,12 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-data "aws_ami" "ubuntu" {
+data "aws_ami" "ubuntu_pro" {
   most_recent = true
 
   filter {
     name   = "name"
-    values = [local.ami_name_pattern]
+    values = [local.ami_name_pattern_pro]
   }
 
   filter {
@@ -59,7 +59,7 @@ data "aws_ami" "selected" {
   filter {
     name = "image-id"
     values = [
-      var.asg_ami == null ? data.aws_ami.ubuntu.id : var.asg_ami
+      var.asg_ami == null ? data.aws_ami.ubuntu_pro.id : var.asg_ami
     ]
   }
 }

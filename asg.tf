@@ -51,7 +51,7 @@ resource "aws_launch_template" "openvpn" {
   name_prefix   = "openvpn-"
   instance_type = var.instance_type
   key_name      = local.key_pair_name
-  image_id      = var.asg_ami == null ? data.aws_ami.ubuntu.id : var.asg_ami
+  image_id      = var.asg_ami == null ? data.aws_ami.ubuntu_pro.id : var.asg_ami
   iam_instance_profile {
     arn = module.instance_profile.instance_profile_arn
   }
@@ -152,4 +152,7 @@ resource "aws_autoscaling_group" "openvpn" {
       value               = tag.value
     }
   }
+  depends_on = [
+    aws_efs_mount_target.openvpn-config-enc
+  ]
 }
