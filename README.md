@@ -1,65 +1,71 @@
 # terraform-aws-openvpn
-The [openvpn module](https://registry.terraform.io/modules/infrahouse/openvpn/aws/latest) deploys an OpenVPN server 
-with Google OAuth2.0 authentication.
+
+The [openvpn module](https://registry.terraform.io/modules/infrahouse/openvpn/aws/latest) deploys 
+an OpenVPN server with Google OAuth 2.0 authentication.
+
+Starting with version 4.0.0, the module supports VPN users from multiple Google domains.
 
 ![OpenVPN diagram](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvpn.drawio.png)
 
-OpenVPN Portal is a web application. It authenticates users by their Google account and generates 
-an OpenVPN profile for them.
+The OpenVPN Portal is a web application that authenticates users via their Google accounts 
+and generates an OpenVPN profile for them.
 
-You would put the OpenVPN server in a public subnet in your AWS cloud to give access to authorized users 
-to AWS resources in private subnets.
+You should place the OpenVPN server in public subnets in your AWS environment 
+so authorized users can access resources in private subnets.
 
 ## Installation
 
-To illustrate how to use the module, I will deploy a VPN server for InfraHouse.
+To illustrate how to use the module, we will deploy a VPN server for InfraHouse.
 
-### **Step 1**: Create a Terraform code.
+### **Step 1**: Create Terraform configuration
+
 ```hcl
 module "vpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
   version = "3.1.1"
+
   providers = {
     aws     = aws
     aws.dns = aws
   }
+
   backend_subnet_ids         = module.management.subnet_private_ids
   lb_subnet_ids              = module.management.subnet_public_ids
-  google_oauth_client_writer = data.aws_iam_role.AWSAdministratorAccess.arn
+  google_oauth_client_writer = tolist(data.aws_iam_roles.sso-admin.arns)[0]
   zone_id                    = module.infrahouse_com.infrahouse_zone_id
+  allowed_domains            = [
+    # "infrahouse.com",  <- implicitly derived from module.infrahouse_com.infrahouse_zone_id
+    "foo.com"
+  ]
 }
 
-data "aws_iam_role" "AWSAdministratorAccess" {
-  name = "AWSReservedSSO_AWSAdministratorAccess_a84a03e62f490b50"
+data "aws_iam_roles" "sso-admin" {
+  name_regex  = "AWSReservedSSO_AWSAdministratorAccess_.*"
+  path_prefix = "/aws-reserved/sso.amazonaws.com/"
 }
 ```
-Our VPN setup will consist of two components: OpenVPN server and OpenVPN Portal
+Our VPN setup will consist of two components: the OpenVPN server and the OpenVPN Portal.
 
-The OpenVPN server is deployed on an autoscale group and fronted by a network load balancer.
+OpenVPN server: Deployed in an Auto Scaling group fronted by a Network Load Balancer.
 
 ![openvp-server](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvp-server.drawio.png)
 
-The OpenVPN Portal is a Web application deployed as an AWS ECS service. 
-It talks to Google to authenticate users and distributes OpenVPN profiles needed to configure a client application. 
+OpenVPN Portal: A web application deployed as an AWS ECS service. 
+It authenticates users via Google and distributes OpenVPN profiles.
 
 ![openvp-portal](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvp-portal.drawio.png)
 
-All module variables here are required. Let's go over them.
+All module variables shown above are required, except `allowed_domains`:
 
-* `backend_subnet_ids`. This is a list of subnet-id-s where autoscale EC2 instances will be places. 
-Access to VPN is provided by a network load balancer, so we want the EC2 instances to run in private subnets.
-* `lb_subnet_ids`. This is a list of subnet-id-s where the network load balancer will be running. We want it to be in  
-public subnets because it is going to be a publicly accessible gateway to our private AWS resources.  
-* `google_oauth_client_writer`. The OpenVPN Portal will need credentials to talk to Google, so it can authenticate users.
-`google_oauth_client_writer` is an identity ARN that has a permission to update a secret with those credentials.
-More on that below. In this case, I will update the secret, so the value is a role ARN I get on my laptop 
-via AWS Control Tower SSO. 
-* `zone_id`. The module will create two public DNS names: openvpn.infrahouse.com and openvpn-portal.infrahouse.com.
-infrahouse.com is hosted in Route53 so `zone_id` is its zone identifier.
-* `providers` block. In some cases, you want the VPN and DNS resources to be managed by different roles or 
-deployed in different AWS account. That's why I separated two providers. 
-`aws.dns` is responsible for creating Route53 resources and the default `aws` provider does the rest. In my case, 
-the VPN and infrahouse.com live in the same AWS account. so the providers are the same.   
+* `backend_subnet_ids`. A list of subnet IDs for the EC2 instances in the Auto Scaling group (private subnets).
+* `lb_subnet_ids`. A list of subnet IDs for the Network Load Balancer (public subnets).  
+* `google_oauth_client_writer`. The IAM role ARN permitted to update the Google OAuth client secret.
+* `zone_id`. The Route 53 zone ID (e.g., infrahouse.com) for DNS records.
+* `providers` Separate providers for AWS and Route 53 (`aws.dns`). 
+`aws.dns` is responsible for creating Route53 resources and the default `aws` provider does the rest. In our case, 
+the VPN and infrahouse.com live in the same AWS account. so the providers are the same.
+* `allowed_domains` (optional). A list of domain names whose users are permitted to connect to the VPN server. 
+The module will automatically include the domain specified by `zone_id`.
 
 ### **Step 2**: Create a pull request
 
@@ -113,13 +119,15 @@ Branch 'vpn' set up to track remote branch 'vpn' from 'origin'.
 https://github.com/infrahouse/aws-control-493370826424/pull/199
 ```
 Now, the [pull request](https://github.com/infrahouse/aws-control-493370826424/pull/199) successfully ran `terraform plan` 
-and we can review what Terraform is going to do.
+and we can review the plan output to ensure no unexpected changes.
 
 ![terraform-plan.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/terraform-plan.png)
 
-Normally, the module will create about 80 resources. In my case, all of them start with a "module.vnp", 
-which is a good indicator Terraform will create resources that we expect it to do.
-If your plan includes resources to be changed or destroyed - double-check the STDOUT to understand what's going on.
+By default, the module provisions around 80 resources. 
+In your deployment, each resource address should be prefixed with `module.vpn`, 
+confirming that Terraform will create the expected resources. 
+If your plan shows any resources to be changed or destroyed, 
+review the output carefully to understand the proposed actions before applying.
 
 ![terraform-plan-stdout.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/terraform-plan-stdout.png)
 
@@ -147,51 +155,54 @@ Fast-forward
 
 ### **Step 4**: Configure Google OAuth2.0.
 
-Now if you open https://openvpn-portal.infrahouse.com/ in a browser, you'll see a 502 error.
-It's because I didn't update Google Client credentials. So, let's remedy that.
+If you visit https://openvpn-portal.infrahouse.com/ in your browser, 
+you’ll get a 502 error because the Google OAuth client credentials haven’t been set yet. 
+Let’s fix that now.
 
 ![502.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/502.png)
 
-This is a Google client secret that Terraform created.
+The module automatically creates a placeholder secret for the Google OAuth client ID. 
+You can confirm this by listing secrets:
+
 ```shell
 $ ih-secrets --aws-region us-west-1 --aws-profile AWSAdministratorAccess-493370826424 list | grep google
 | google_client20240705183915856300000015              | A JSON with Google OAuth Client ID                                                                                        |
 ```
-If you get its value, it will show `NoValue`:
+
+Since it’s just a placeholder, the secret has no value yet. Retrieving it returns `NoValue`:
+
 ```shell
 $ ih-secrets --aws-region us-west-1 --aws-profile AWSAdministratorAccess-493370826424 get google_client20240705183915856300000015
 NoValue
 ```
 #### **Step 4.1**: Create OAuth 2.0 credentials.
 
-Open [Google Cloud Console](https://console.cloud.google.com/) and create an OpenVPN project.
+Open the [Google Cloud Console](https://console.cloud.google.com/) and select (or create) your OpenVPN project.
 
 ![gc-1.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-1.png)
 
-Next, go to "Credentials". 
+In the sidebar, go to **APIs & Services > Credentials**.
 
 ![gc-2.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-2.png)
 
-Next, Create OAuth client ID. Note, authentication requests will come from https://openvpn-portal.infrahouse.com,
-so I added it to "Authorized JavaScript origins". Another important setting is "Authorized redirect URIs".
-It must be https://openvpn-portal.infrahouse.com/login/google/authorized. For your domain it will be something like
-https://openvpn-portal.my-domain.com/login/google/authorized.
+Click **Create credentials > OAuth client ID**. Then configure:
+* *Authorized JavaScript origins*: https://openvpn-portal.infrahouse.com
+* *Authorized redirect URIs*: https://openvpn-portal.infrahouse.com/login/google/authorized 
+(For your own domain, replace infrahouse.com with my-domain.com.)
 
 ![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-3.png)
 
 #### **Step 4.2**: Download OAuth 2.0 credentials.
 
-After you press a create button, you'll see a confirmation screen with a DOWNLOAD JSON link. 
-Click it and save the file.
+After clicking **Create**, a confirmation screen will appear with a **Download JSON** link—click 
+it to download and save your credentials file.
 
 ![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/gc-04.png)
 
 #### **Step 4.3**: Update Google OAuth Client ID secret value.
 
-From a previous I know the secret name is `google_client20240705183915856300000015`. Let's update it 
-with a valid value.
-
-As a reference, the value should look like this
+From the previous step, the secret name is `google_client20240705183915856300000015`. 
+Let’s populate it with your actual credentials. For reference, the JSON should look like this:
 ```shell
 $ jq < client_secret.json
 {
@@ -220,20 +231,24 @@ $ ih-secrets \
   google_client20240705183915856300000015 \
   client_secret.json
 ```
+#### **Step 4.4**: (Optional) Enable access to VPN from multiple domains.
+
+If you plan to support VPN users from more than one domain, you need to make the OpenVPN App external.
+To do that, click on *APIs & Services > OAuth consent screen > Audience* and publish the OpenVPN App.
+![gc-05.png](assets/gc-05.png)
 
 ### **Step 5**: Check on OpenVPN Portal.
-After a short time, the portal should pick up the new and value Google Client ID value. 
-When you open https://openvpn-portal.infrahouse.com/ again, it will present a Google login window. 
 
-After a successful authentication, the portal will show a page with OpenVPN client instructions.
-
+After a few moments, the portal will pick up the updated Google OAuth credentials. 
+When you revisit https://openvpn-portal.infrahouse.com/, you’ll see the Google sign-in prompt. 
+Once authenticated, the portal will display instructions for your OpenVPN client.
 
 ![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/portal-start-page.png)
 
 ### **Step 6**: Install OpenVPN client.
 
-The portal has links to an installer for MacOS and Windows. For other OS-es you can go to https://openvpn.net/client/
-and download the client from there.
+The portal provides installers for macOS and Windows. 
+For other operating systems, visit https://openvpn.net/client/ to download the appropriate OpenVPN client.
 
 ![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/openvpn-download-page.png)
 
@@ -249,9 +264,9 @@ to import the profile.
 
 ### **Step 7**: Connect to VPN.
 
-| Original Image                            |    | Transformed Image                            |
-|-------------------------------------------|----|----------------------------------------------|
-| ![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/connect-page.png)       | ➡️ | ![img.png](connected-page.png)               |
+|                                                                                                             |    |                                |                            
+|-------------------------------------------------------------------------------------------------------------|----|--------------------------------|
+| ![img.png](https://raw.githubusercontent.com/infrahouse/terraform-aws-openvpn/main/assets/connect-page.png) | ➡️ | ![img.png](connected-page.png) |
 
 
 ### **Step 8**: Check network connectivity with the VPN server.
@@ -293,14 +308,13 @@ PING 10.0.1.244 (10.0.1.244) 56(84) bytes of data.
 3 packets transmitted, 0 received, 100% packet loss, time 2092ms
 ```
 
-It's because we didn't let the VPN client what networks are accessible via the VPN tunnel.
+This happens because we haven’t told the VPN client which networks it should route through the tunnel.
 
 
 ### **Step 9**: Add routes to the VPN client.
 
-I want to make the management VPN in the InfraHouse cloud to be available to the VPN clients. To do that, let's 
-amend the module configuration.
-
+To allow VPN clients to reach the InfraHouse cloud management network, 
+let’s update the module configuration.
 ```shell
 $ git log -p -1
 commit d3c4f50dd8d427ab25ba30cadccd328bc1def7d3 (HEAD -> vpn, origin/vpn)
@@ -333,9 +347,10 @@ and make sure it's successfully applied.
 
 ### **Step 10**: Check network availability of instances beyond the VPN server.
 
-When the Terraform change is applied, the OpenVPN autoscaling group triggers in instance refresh. 
-It takes at least 5 to 10 minutes to rotate the instances. The openVPN client will reconnect when the server changes.
-Wait until it happens and check if you can ping private IP addresses of instances in your VPC.
+Applying the Terraform changes triggers an Auto Scaling instance refresh for the OpenVPN servers, 
+which can take 5–10 minutes. The OpenVPN client will automatically reconnect 
+to the new instances once they’re ready. After that, verify connectivity 
+by pinging the private IP addresses in your VPC.
 
 ```shell
 $ ih-ec2 --aws-region us-west-1 --aws-profile AWSAdministratorAccess-493370826424 list | grep openvpn
