@@ -22,7 +22,7 @@ To illustrate how to use the module, we will deploy a VPN server for InfraHouse.
 ```hcl
 module "vpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "4.1.0"
+  version = "4.2.0"
 
   providers = {
     aws     = aws
@@ -86,7 +86,7 @@ index 0000000..035b925
 @@ -0,0 +1,16 @@
 +module "vpn" {
 +  source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-+  version = "4.1.0"
++  version = "4.2.0"
 +  providers = {
 +    aws     = aws
 +    aws.dns = aws
