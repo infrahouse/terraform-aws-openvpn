@@ -46,6 +46,12 @@ test-clean:  ## Run a test and destroy resources
 		--test-role-arn=${TEST_ROLE} \
 		tests/test_module.py
 
+.PHONY: lint
+lint:  ## Check code style
+	yamllint \
+		.github/workflows
+	terraform fmt -check -recursive
+
 .PHONY: bootstrap
 bootstrap: ## bootstrap the development environment
 	pip install -U "pip ~= 25.2"
