@@ -47,11 +47,15 @@ variable "environment" {
 
 variable "extra_files" {
   description = "Additional files to create on an instance."
-  type = list(object({
-    content     = string
-    path        = string
-    permissions = string
-  }))
+  type = list(
+    object(
+      {
+        content     = string
+        path        = string
+        permissions = string
+      }
+    )
+  )
   default = []
 }
 
@@ -67,8 +71,11 @@ variable "extra_repos" {
   type = map(
     object(
       {
-        source = string
-        key    = string
+        source   = string
+        key      = string
+        machine  = optional(string)
+        authFrom = optional(string)
+        priority = optional(number)
       }
     )
   )
