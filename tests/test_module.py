@@ -3,10 +3,10 @@ import os
 import sys
 from base64 import b64decode
 from os import path as osp
-from pprint import pprint
 from subprocess import check_call, run
 from textwrap import dedent
 
+import pytest
 from pytest_infrahouse import terraform_apply
 
 from tests.conftest import (
@@ -15,6 +15,7 @@ from tests.conftest import (
 )
 
 
+@pytest.mark.parametrize("aws_provider_version", ["~> 5.11", "~> 6.0"], ids=["aws5", "aws6"])
 def test_module(
     service_network,
     aws_region,
@@ -22,11 +23,32 @@ def test_module(
     test_zone_name,
     keep_after,
     boto3_session,
+    aws_provider_version,
 ):
     subnet_public_ids = service_network["subnet_public_ids"]["value"]
-    subnet_private_ids = service_network["subnet_private_ids"]["value"]
 
     terraform_module_dir = osp.join(TERRAFORM_ROOT_DIR, "openvpn")
+
+    # Clean up any existing Terraform state and lock files
+    check_call(["rm", "-rf", ".terraform", ".terraform.lock.hcl"], cwd=terraform_module_dir)
+
+    # Update terraform.tf with the specified AWS provider version
+    terraform_tf_content = dedent(
+        f"""
+        terraform {{
+          required_providers {{
+            aws = {{
+              source  = "hashicorp/aws"
+              version = "{aws_provider_version}"
+            }}
+          }}
+        }}
+        """
+    )
+
+    with open(osp.join(terraform_module_dir, "terraform.tf"), "w") as fp:
+        fp.write(terraform_tf_content)
+
     with open(osp.join(terraform_module_dir, "terraform.tfvars"), "w") as fp:
         fp.write(
             dedent(
@@ -47,6 +69,8 @@ def test_module(
                     """
                 )
             )
+
+    LOG.info("Testing with AWS provider version: %s", aws_provider_version)
 
     with terraform_apply(
         terraform_module_dir,
