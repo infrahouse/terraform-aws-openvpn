@@ -102,7 +102,7 @@ resource "aws_autoscaling_group" "openvpn" {
   min_size                  = var.asg_min_size == null ? length(var.backend_subnet_ids) : var.asg_min_size
   vpc_zone_identifier       = var.backend_subnet_ids
   health_check_type         = "ELB"
-  health_check_grace_period = 900
+  health_check_grace_period = var.asg_health_check_grace_period
   max_instance_lifetime     = 90 * 24 * 3600
   dynamic "launch_template" {
     for_each = var.on_demand_base_capacity == null ? [1] : []
