@@ -1,2 +1,4 @@
 env
 .terraform.tfstate.lock.info
+terraform.tf
+.terraform
