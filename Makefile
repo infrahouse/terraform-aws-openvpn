@@ -27,9 +27,7 @@ install-hooks:  ## Install repo hooks
 
 .PHONY: test
 test:  ## Run tests on the module
-	rm -f test_data/test_module/.terraform.lock.hcl
-	#rm -rf test_data/test_module/.terraform
-	pytest -xvvs tests/tests/test_module.py
+	pytest -xvvs tests/
 
 .PHONY: test-keep
 test-keep:  ## Run a test and keep resources
@@ -46,10 +44,16 @@ test-clean:  ## Run a test and destroy resources
 		--test-role-arn=${TEST_ROLE} \
 		tests/test_module.py
 
+.PHONY: lint
+lint:  ## Check code style
+	yamllint \
+		.github/workflows
+	terraform fmt -check -recursive
+
 .PHONY: bootstrap
 bootstrap: ## bootstrap the development environment
-	pip install -U "pip ~= 23.1"
-	pip install -U "setuptools ~= 68.0"
+	pip install -U "pip ~= 25.2"
+	pip install -U "setuptools ~= 80.9"
 	pip install -r requirements.txt
 
 .PHONY: clean
