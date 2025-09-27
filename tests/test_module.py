@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from base64 import b64decode
 from os import path as osp
@@ -55,10 +56,15 @@ def test_module(
         # update Google OAuth 2.0 Client IDs
         google_client_secret = tf_output["google_client_secret"]["value"]
         try:
-            client_secret_path = osp.join(
-                terraform_module_dir, "env", "client_secret.json"
-            )
-            client_secret = open(client_secret_path).read()
+            # Try to read client_secret from environment variable first
+            client_secret = os.environ.get("OPENVPN_CLIENT_SECRET")
+            if not client_secret:
+                # Fall back to reading from file
+                client_secret_path = osp.join(
+                    terraform_module_dir, "env", "client_secret.json"
+                )
+                client_secret = open(client_secret_path).read()
+
             secretsmanager_client = boto3_session.client(
                 "secretsmanager", region_name=aws_region
             )
