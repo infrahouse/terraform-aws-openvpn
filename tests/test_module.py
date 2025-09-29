@@ -15,7 +15,9 @@ from tests.conftest import (
 )
 
 
-@pytest.mark.parametrize("aws_provider_version", ["~> 5.11", "~> 6.0"], ids=["aws5", "aws6"])
+@pytest.mark.parametrize(
+    "aws_provider_version", ["~> 5.11", "~> 6.0"], ids=["aws5", "aws6"]
+)
 def test_module(
     service_network,
     aws_region,
@@ -30,7 +32,9 @@ def test_module(
     terraform_module_dir = osp.join(TERRAFORM_ROOT_DIR, "openvpn")
 
     # Clean up any existing Terraform state and lock files
-    check_call(["rm", "-rf", ".terraform", ".terraform.lock.hcl"], cwd=terraform_module_dir)
+    check_call(
+        ["rm", "-rf", ".terraform", ".terraform.lock.hcl"], cwd=terraform_module_dir
+    )
 
     # Update terraform.tf with the specified AWS provider version
     terraform_tf_content = dedent(

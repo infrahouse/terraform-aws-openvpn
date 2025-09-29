@@ -12,3 +12,8 @@ output "autoscaling_group_name" {
   description = "Autoscaling group name."
   value       = aws_autoscaling_group.openvpn.name
 }
+
+output "openvpn-instance-role-arn" {
+  description = "ARN of the IAM role attached to the OpenVPN instance"
+  value       = module.instance_profile.instance_role_arn
+}
