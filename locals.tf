@@ -4,7 +4,7 @@ resource "random_string" "role-suffix" {
 }
 
 locals {
-  module_version = "4.4.1"
+  module_version = "4.4.2"
 
   default_module_tags = {
     environment : var.environment
