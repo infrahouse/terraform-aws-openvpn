@@ -408,7 +408,7 @@ rtt min/avg/max/mdev = 7.285/7.285/7.285/0.000 ms
 | <a name="module_google_client"></a> [google\_client](#module\_google\_client) | infrahouse/secret/aws | 1.1.0 |
 | <a name="module_instance_profile"></a> [instance\_profile](#module\_instance\_profile) | registry.infrahouse.com/infrahouse/instance-profile/aws | 1.9.0 |
 | <a name="module_openvpn-portal"></a> [openvpn-portal](#module\_openvpn-portal) | registry.infrahouse.com/infrahouse/ecs/aws | 5.12.0 |
-| <a name="module_userdata"></a> [userdata](#module\_userdata) | registry.infrahouse.com/infrahouse/cloud-init/aws | 2.2.0 |
+| <a name="module_userdata"></a> [userdata](#module\_userdata) | registry.infrahouse.com/infrahouse/cloud-init/aws | 2.2.2 |
 
 ## Resources
 
@@ -503,7 +503,8 @@ rtt min/avg/max/mdev = 7.285/7.285/7.285/0.000 ms
 
 | Name | Description |
 |------|-------------|
-| <a name="output_autoscaling_group_name"></a> [autoscaling\_group\_name](#output\_autoscaling\_group\_name) | Autoscaling group name. |
-| <a name="output_google_client_secret"></a> [google\_client\_secret](#output\_google\_client\_secret) | google\_client secret name. OpenVPN portal admin must update the secret with a Google OAuth client JSON. |
+| <a name="output_autoscaling_group_name"></a> [autoscaling\_group\_name](#output\_autoscaling\_group\_name) | Name of the autoscaling group managing the OpenVPN instances |
+| <a name="output_google_client_secret"></a> [google\_client\_secret](#output\_google\_client\_secret) | Google OAuth client secret name. The OpenVPN portal admin must update the secret with a Google OAuth client JSON. |
 | <a name="output_load_balancer_arn"></a> [load\_balancer\_arn](#output\_load\_balancer\_arn) | ARN of the load balancer for the OpenVPN portal |
 | <a name="output_openvpn-instance-role-arn"></a> [openvpn-instance-role-arn](#output\_openvpn-instance-role-arn) | ARN of the IAM role attached to the OpenVPN instance |
+| <a name="output_portal_url"></a> [portal\_url](#output\_portal\_url) | URL of the OpenVPN portal web interface |
