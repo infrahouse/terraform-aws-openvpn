@@ -26,6 +26,7 @@ def test_module(
     keep_after,
     boto3_session,
     aws_provider_version,
+    cleanup_ecs_task_definitions,
 ):
     subnet_public_ids = service_network["subnet_public_ids"]["value"]
 
@@ -144,6 +145,9 @@ def test_module(
 
         cluster_name = "openvpn-portal"
         service_name = "openvpn-portal"
+
+        # Register task family for cleanup
+        cleanup_ecs_task_definitions(service_name)
 
         ecs = boto3_session.client("ecs", region_name=aws_region)
 
