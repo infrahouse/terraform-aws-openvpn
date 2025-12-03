@@ -34,7 +34,7 @@ module "flask_secret_key" {
 
 module "google_client" {
   source             = "infrahouse/secret/aws"
-  version            = "1.1.0"
+  version            = "1.1.1"
   environment        = var.environment
   secret_description = "A JSON with Google OAuth Client ID"
   secret_name_prefix = "google_client"
