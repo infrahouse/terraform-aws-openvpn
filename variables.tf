@@ -267,6 +267,11 @@ variable "sns_topic_alarm_arn" {
   default     = null
 }
 
+variable "alarm_emails" {
+  description = "List of email addresses to receive CloudWatch alarm notifications for the OpenVPN portal ECS service."
+  type        = list(string)
+}
+
 variable "extra_instance_profile_permissions" {
   description = "A JSON with a permissions policy document. The policy will be attached to the ASG instance profile."
   type        = string

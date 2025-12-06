@@ -8,6 +8,9 @@ module "openvpn" {
     aws     = aws
     aws.dns = aws
   }
+  alarm_emails = [
+    "test@example.com"
+  ]
   backend_subnet_ids           = var.backend_subnet_ids
   lb_subnet_ids                = var.lb_subnet_ids
   zone_id                      = data.aws_route53_zone.test-zone.zone_id
