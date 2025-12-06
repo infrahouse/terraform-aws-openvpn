@@ -1,10 +1,11 @@
 module "openvpn-portal" {
   source  = "registry.infrahouse.com/infrahouse/ecs/aws"
-  version = "5.12.0"
+  version = "7.0.0"
   providers = {
     aws     = aws
     aws.dns = aws.dns
   }
+  alarm_emails                              = var.alarm_emails
   environment                               = var.environment
   service_name                              = "${var.service_name}-portal"
   docker_image                              = var.portal-image
@@ -12,7 +13,6 @@ module "openvpn-portal" {
   asg_subnets                               = var.backend_subnet_ids
   zone_id                                   = data.aws_route53_zone.current.zone_id
   dns_names                                 = ["${var.service_name}-portal"]
-  internet_gateway_id                       = data.aws_internet_gateway.current.id
   ssh_key_name                              = local.key_pair_name
   container_port                            = 8080
   container_healthcheck_command             = "/usr/bin/pkill -0 uvicorn || exit 1"
