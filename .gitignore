@@ -37,3 +37,7 @@ tf.plan
 __pycache__
 .pytest_cache
 pytest-*-output.log
+
+# Claude Code local settings
+.claude/*.local.json
+.claude/reviews/
