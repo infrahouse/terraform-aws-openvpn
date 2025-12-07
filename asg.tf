@@ -18,7 +18,7 @@ module "userdata" {
     var.packages,
     [
       "awscli",
-      "nfs-common"
+      "nfs-common",
     ]
   )
   extra_files = var.extra_files
@@ -31,6 +31,7 @@ module "userdata" {
         ca_key_passphrase_secret : module.ca_passkey.secret_name
         openvpn_port : local.openvpn_tcp_port
         routes : var.routes
+        cloudwatch_log_group : aws_cloudwatch_log_group.openvpn.name
       }
     },
     {

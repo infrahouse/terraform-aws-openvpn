@@ -40,6 +40,17 @@ data "aws_iam_policy_document" "instance_permissions" {
       "arn:aws:autoscaling:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.asg_name}"
     ]
   }
+  # CloudWatch Logs permissions for shipping OpenVPN application logs
+  statement {
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogStreams"
+    ]
+    resources = [
+      "${aws_cloudwatch_log_group.openvpn.arn}:*"
+    ]
+  }
 }
 
 resource "random_string" "profile-suffix" {

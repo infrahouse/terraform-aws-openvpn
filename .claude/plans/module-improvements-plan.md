@@ -128,34 +128,85 @@ Items are organized by priority and grouped by functional area to minimize confl
 
 ---
 
-### 2.2 Add NLB Access Logging Configuration ✅ APPROVED
+### 2.2 Add OpenVPN Application Logging to CloudWatch ✅ COMPLETED
 **Priority:** Medium
-**Files:** `nlb.tf`, `variables.tf`, possibly new `nlb-logs.tf`
-**Estimated Time:** 30 minutes
+**Files:** `openvpn-logs.tf` (new), `variables.tf`, `asg.tf`, `iam.tf`, `portal.tf`, `README.md`
+**Estimated Time:** 45 minutes
+**Actual Time:** 60 minutes
 
-**Changes Required:**
-1. Add new variables:
-   - `enable_nlb_access_logs` (bool, default: false)
-   - `nlb_access_logs_bucket` (string, optional)
-   - `nlb_access_logs_prefix` (string, default: "nlb-logs")
+**Strategy Revision - Why NLB Logs Were Abandoned:**
 
-2. Create S3 bucket for NLB logs (conditional on `enable_nlb_access_logs`):
-   - Enable versioning
-   - Enable encryption
-   - Add lifecycle policy
-   - Add bucket policy for NLB service principal
+After implementation attempt, we discovered that **NLB access logs are useless for OpenVPN**:
 
-3. Update `aws_lb.openvpn` resource:
-   - Add `access_logs` block when enabled
+1. **Layer 4 Passthrough**: NLB operates at Layer 4 (TCP/UDP) and has no visibility into the TLS handshake between OpenVPN client and server
+2. **No Application Data**: NLB only sees TCP connection metadata, not authentication events or user sessions
+3. **Limited Value**: NLB logs would only show "TCP connection from IP X to port 1194" - already captured by VPC Flow Logs
+4. **Compliance Gap**: ISO 27001 requires user authentication logs, connection duration, data transfer - none of which NLB can provide
+
+**Revised Approach - OpenVPN Application Logs:**
+
+Focus on capturing actual OpenVPN application logs which contain:
+- Authentication events (who connected, when, from where)
+- Connection duration and session details
+- Bytes transferred per user
+- Certificate/credential information
+- Connection failures and security events
+
+**Implementation Plan:**
+
+1. ✅ Added unified logging variable:
+   - `cloudwatch_log_retention_days` (number, default: 365)
+   - Applied to both ECS portal logs and OpenVPN application logs
+   - Validation for valid CloudWatch retention periods
+
+2. ✅ Create CloudWatch Log Group for OpenVPN application logs:
+   - `/aws/openvpn/${service_name}` - Main application logs
+   - Retention: `var.cloudwatch_log_retention_days` (365 days default)
+   - Encrypted by default (CloudWatch standard encryption)
+   - Created in `openvpn-logs.tf`
+
+3. ✅ Configure CloudWatch Logs Agent on OpenVPN EC2 instances:
+   - Ship `/var/log/openvpn/openvpn.log` - Main OpenVPN logs
+   - Ship `/var/log/openvpn/openvpn-status.log` - Active connections status
+   - Ship `/var/log/auth.log` - System authentication (SSH, sudo)
+   - Configure via user-data in ASG launch template
+   - Added `amazon-cloudwatch-agent` package
+   - Added CloudWatch agent configuration JSON file
+   - Added `runcmd` to start CloudWatch agent service
+
+4. ✅ Update IAM instance profile:
+   - Add permissions for CloudWatch Logs (PutLogEvents, CreateLogStream, DescribeLogStreams)
+   - Scope to OpenVPN log groups only
+
+5. ✅ Update README:
+   - Document logging architecture and strategy
+   - Explain what logs are captured and where
+   - Note that VPC Flow Logs (managed separately) capture network-level data
+   - Provide guidance on querying logs for compliance/audit
+   - Added comprehensive "Logging and Compliance" section
+
+**Why This Approach is Better:**
+
+- **Compliance-Ready**: Captures actual user authentication and session data required for ISO 27001
+- **Centralized**: All logs queryable in CloudWatch Logs
+- **Encrypted**: CloudWatch Logs encrypted at rest by default
+- **Searchable**: CloudWatch Logs Insights for compliance queries
+- **Cost-Effective**: Only pay for logs that matter, not useless NLB metadata
+- **Unified Retention**: Single variable controls all CloudWatch log retention across module
 
 **Testing:**
-- Verify logs are written to S3
-- Verify bucket policy allows NLB to write
-- Test with logs enabled and disabled
+- ✅ Verify CloudWatch agent installation on OpenVPN instances
+- ✅ Confirm logs appear in CloudWatch after VPN connection
+- ✅ Test log queries for common compliance scenarios
+- ✅ Validate IAM permissions are scoped correctly
 
 ---
 
 ## Phase 3: Observability & Monitoring
+
+### 3.0
+    
+Fix CPU alarm using C:\Users\aleks\code\infrahouse\terraform\terraform-aws-website-pod\alarms.tf as a pattern 
 
 ### 3.1 Add CloudWatch Log Groups and Alarms ✅ APPROVED
 **Priority:** Medium
