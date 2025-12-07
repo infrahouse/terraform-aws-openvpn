@@ -30,6 +30,7 @@ module "openvpn-portal" {
   container_cpu                             = 400 # One vCPU is 1024
   container_memory                          = 200 # Value in MB
   access_log_force_destroy                  = var.alb_access_log_force_destroy
+  cloudwatch_log_group_retention            = var.cloudwatch_log_retention_days
   cloudinit_extra_commands                  = var.cloudinit_extra_commands
 
   extra_instance_profile_permissions = var.extra_instance_profile_permissions

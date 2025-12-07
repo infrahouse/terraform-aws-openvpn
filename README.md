@@ -381,6 +381,104 @@ PING 10.0.1.104 (10.0.1.104) 56(84) bytes of data.
 1 packets transmitted, 1 received, 0% packet loss, time 0ms
 rtt min/avg/max/mdev = 7.285/7.285/7.285/0.000 ms
 ```
+
+## Logging and Compliance
+
+The module provides comprehensive logging for audit trail and ISO 27001 compliance requirements.
+
+### Logging Architecture
+
+The module captures three layers of logging:
+
+#### 1. OpenVPN Application Logs (Recommended - In Progress)
+**What it captures:**
+- User authentication events (who connected, when, from where)
+- Connection duration and session details
+- Bytes transferred per user
+- Certificate/credential validation
+- Connection failures and security events
+
+**Where:**
+- CloudWatch Logs: `/aws/openvpn/<service_name>`
+- Retention: Configurable via `cloudwatch_log_retention_days` (default: 365 days)
+
+**Why it matters:**
+This is your primary audit trail for **user access control** - required for ISO 27001 compliance. These logs prove who accessed your infrastructure and when.
+
+#### 2. ECS Portal Logs (Configured)
+**What it captures:**
+- Portal application logs
+- User authentication via Google OAuth
+- Profile generation events
+- Application errors
+
+**Where:**
+- CloudWatch Logs: Managed by ECS module
+- Retention: Controlled by `cloudwatch_log_retention_days` variable
+
+#### 3. VPC Flow Logs (External - Recommended)
+**What it captures:**
+- Network-level connection metadata
+- Source/destination IPs and ports
+- Bytes transferred
+- Accept/reject decisions
+
+**Where:**
+- Managed separately via VPC configuration
+- Recommend sending to both CloudWatch Logs (for queries) and S3 (for long-term retention)
+
+**Why it matters:**
+Network-level audit trail for compliance and security incident investigation.
+
+### Why NLB Access Logs Are NOT Included
+
+Network Load Balancer (NLB) access logs are **intentionally not configured** for this module because:
+
+1. **Layer 4 Passthrough**: NLB operates at Layer 4 (TCP/UDP) and cannot see into the TLS tunnel between OpenVPN client and server
+2. **No Application Visibility**: NLB only sees "TCP connection from IP X to port 1194" - no user identity, no authentication events
+3. **Redundant Data**: VPC Flow Logs already capture this network metadata
+4. **Compliance Gap**: ISO 27001 requires user access logs, which NLB cannot provide
+
+**Bottom line:** For OpenVPN, NLB logs provide no additional value over VPC Flow Logs.
+
+### Querying Logs for Compliance
+
+Use CloudWatch Logs Insights to query OpenVPN logs:
+
+```
+# Find all connections from a specific user
+fields @timestamp, @message
+| filter @message like /user@example.com/
+| sort @timestamp desc
+
+# Find all authentication failures
+fields @timestamp, @message
+| filter @message like /AUTH.*FAILED/
+| sort @timestamp desc
+
+# Calculate connection duration for a user
+fields @timestamp, @message
+| filter @message like /CONNECTED/ or @message like /DISCONNECTED/
+| stats count() by bin(5m)
+```
+
+### Log Retention and Costs
+
+- **Default retention**: 365 days (1 year)
+- **Configurable via**: `cloudwatch_log_retention_days` variable
+- **Valid values**: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653, or 0 (never expire)
+- **Cost optimization**: Set to 90 days for cost savings if long-term retention not required
+
+### Compliance Recommendations
+
+For **ISO 27001** or other compliance frameworks:
+
+1. ✅ **Enable VPC Flow Logs** (if not already enabled)
+2. ✅ **Configure log retention** according to your compliance requirements (365 days default)
+3. ✅ **Set up CloudWatch alarms** for authentication failures
+4. ✅ **Regular log reviews** using CloudWatch Logs Insights
+5. ✅ **Export to S3** for long-term archival (if retention > 3653 days required)
+
 <!-- BEGIN_TF_DOCS -->
 
 ## Requirements
@@ -417,6 +515,7 @@ rtt min/avg/max/mdev = 7.285/7.285/7.285/0.000 ms
 | Name | Type |
 |------|------|
 | [aws_autoscaling_group.openvpn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_group) | resource |
+| [aws_cloudwatch_log_group.openvpn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
 | [aws_cloudwatch_metric_alarm.cpu_utilization_alarm](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_efs_file_system.openvpn-config-enc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_file_system) | resource |
 | [aws_efs_mount_target.openvpn-config-enc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) | resource |
@@ -472,6 +571,7 @@ rtt min/avg/max/mdev = 7.285/7.285/7.285/0.000 ms
 | <a name="input_asg_min_size"></a> [asg\_min\_size](#input\_asg\_min\_size) | Minimum number of instances in ASG | `number` | `null` | no |
 | <a name="input_backend_subnet_ids"></a> [backend\_subnet\_ids](#input\_backend\_subnet\_ids) | List of subnet ids where the webserver and database instances will be created | `list(string)` | n/a | yes |
 | <a name="input_cloudinit_extra_commands"></a> [cloudinit\_extra\_commands](#input\_cloudinit\_extra\_commands) | Extra commands for run on ASG. | `list(string)` | `[]` | no |
+| <a name="input_cloudwatch_log_retention_days"></a> [cloudwatch\_log\_retention\_days](#input\_cloudwatch\_log\_retention\_days) | Number of days to retain CloudWatch Logs for all services (NLB access logs, ECS logs, etc.) | `number` | `365` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Name of environment. | `string` | `"development"` | no |
 | <a name="input_extra_files"></a> [extra\_files](#input\_extra\_files) | Additional files to create on an instance. | <pre>list(<br/>    object(<br/>      {<br/>        content     = string<br/>        path        = string<br/>        permissions = string<br/>      }<br/>    )<br/>  )</pre> | `[]` | no |
 | <a name="input_extra_instance_profile_permissions"></a> [extra\_instance\_profile\_permissions](#input\_extra\_instance\_profile\_permissions) | A JSON with a permissions policy document. The policy will be attached to the ASG instance profile. | `string` | `null` | no |

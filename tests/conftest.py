@@ -7,4 +7,5 @@ LOG = logging.getLogger(__name__)
 TERRAFORM_ROOT_DIR = "test_data"
 
 
-setup_logging(LOG, debug=True)
+# Configure root logger so all loggers (including pytest_infrahouse, infrahouse_core, etc.) inherit the config
+setup_logging(logging.getLogger(), debug=False, debug_botocore=False)
