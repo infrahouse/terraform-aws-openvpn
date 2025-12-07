@@ -41,3 +41,4 @@ pytest-*-output.log
 # Claude Code local settings
 .claude/*.local.json
 .claude/reviews/
+nul

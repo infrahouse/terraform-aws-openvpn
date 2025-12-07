@@ -58,8 +58,8 @@ def test_module(
         fp.write(
             dedent(
                 f"""
-                region             = "{aws_region}"
-                test_zone          = "{test_zone_name}"
+                region       = "{aws_region}"
+                test_zone    = "{test_zone_name}"
 
                 lb_subnet_ids      = {json.dumps(subnet_public_ids)}
                 backend_subnet_ids = {json.dumps(subnet_public_ids)}
@@ -70,7 +70,7 @@ def test_module(
             fp.write(
                 dedent(
                     f"""
-                    role_arn        = "{test_role_arn}"
+                    role_arn = "{test_role_arn}"
                     """
                 )
             )
@@ -84,6 +84,8 @@ def test_module(
         LOG.info("%s", json.dumps(tf_output, indent=4))
         # update Google OAuth 2.0 Client IDs
         google_client_secret = tf_output["google_client_secret"]["value"]
+        portal_url = tf_output["portal_url"]["value"]
+
         try:
             # Try to read client_secret from environment variable first
             client_secret = os.environ.get("OPENVPN_CLIENT_SECRET")
@@ -163,3 +165,4 @@ def test_module(
             cluster=cluster_name, services=[service_name]
         )
         LOG.info("Portal services restarted")
+        LOG.info("Portal URL: %s", tf_output["portal_url"]["value"])
