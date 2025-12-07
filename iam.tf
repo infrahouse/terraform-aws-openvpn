@@ -5,6 +5,10 @@ data "aws_iam_policy_document" "instance_permissions" {
     actions   = ["sts:GetCallerIdentity"]
     resources = ["*"]
   }
+  # The ec2:DescribeInstances action requires a wildcard resource ("*") because
+  # it is a read-only list operation that does not support resource-level permissions.
+  # Used by infrahouse-toolkit (ASGInstance class) to read instance tags and state.
+  # AWS API limitation - see: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
   statement {
     actions = [
       "ec2:DescribeInstances",

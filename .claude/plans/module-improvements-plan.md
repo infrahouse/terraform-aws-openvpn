@@ -113,16 +113,18 @@ Items are organized by priority and grouped by functional area to minimize confl
 
 ## Phase 2: Security & IAM Improvements
 
-### 2.1 Document IAM Policy Wildcard Usage ✅ APPROVED
+### 2.1 Document IAM Policy Wildcard Usage ✅ COMPLETED
 **Priority:** Medium
 **Files:** `iam.tf`
 **Estimated Time:** 5 minutes
+**Actual Time:** 5 minutes
 
-**Changes Required:**
-- Add comment to `ec2:DescribeInstances` statement explaining why `*` resource is required
-- Reference AWS API limitation
+**Changes Completed:**
+- ✅ Added detailed comment explaining wildcard resource requirement for `ec2:DescribeInstances`
+- ✅ Referenced AWS API limitation and documentation
+- ✅ Clarified that this is a read-only list operation without resource-level permission support
 
-**Affected Lines:** `iam.tf:9-15`
+**Affected Lines:** `iam.tf:8-18` (added 3-line comment)
 
 ---
 
