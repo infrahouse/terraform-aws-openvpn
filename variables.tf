@@ -37,12 +37,24 @@ variable "asg_max_size" {
 variable "backend_subnet_ids" {
   description = "List of subnet ids where the webserver and database instances will be created"
   type        = list(string)
+  validation {
+    condition     = length(var.backend_subnet_ids) >= 2
+    error_message = "At least two backend subnet IDs must be provided for high availability."
+  }
+  validation {
+    condition     = alltrue([for s in var.backend_subnet_ids : can(regex("^subnet-[a-z0-9]+$", s))])
+    error_message = "All backend_subnet_ids must be valid AWS subnet IDs (format: subnet- followed by alphanumeric characters)."
+  }
 }
 
 variable "environment" {
   description = "Name of environment."
   type        = string
   default     = "development"
+  validation {
+    condition     = can(regex("^[a-z0-9_]+$", var.environment))
+    error_message = "The environment name must contain only lowercase letters, numbers, and underscores (Puppet environment naming requirement)."
+  }
 }
 
 variable "extra_files" {
@@ -108,6 +120,10 @@ variable "instance_type" {
   description = "Instance type to run the OpenVPN instances"
   type        = string
   default     = "m6in.large"
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]+\\.[a-z0-9]+$", var.instance_type))
+    error_message = "The instance_type must be a valid EC2 instance type (e.g., t3.micro, m6in.large, c5.xlarge)."
+  }
 }
 
 variable "key_pair_name" {
@@ -119,6 +135,14 @@ variable "key_pair_name" {
 variable "lb_subnet_ids" {
   description = "List of subnet ids where the load balancer will be created"
   type        = list(string)
+  validation {
+    condition     = length(var.lb_subnet_ids) >= 2
+    error_message = "At least two load balancer subnet IDs must be provided (AWS requires subnets in at least two availability zones)."
+  }
+  validation {
+    condition     = alltrue([for s in var.lb_subnet_ids : can(regex("^subnet-[a-z0-9]+$", s))])
+    error_message = "All lb_subnet_ids must be valid AWS subnet IDs (format: subnet- followed by alphanumeric characters)."
+  }
 }
 
 variable "on_demand_base_capacity" {
@@ -192,6 +216,10 @@ variable "root_volume_size" {
   description = "Root volume size in EC2 instance in Gigabytes"
   type        = number
   default     = 30
+  validation {
+    condition     = var.root_volume_size >= 8 && var.root_volume_size <= 16384
+    error_message = "The root_volume_size must be between 8 GB and 16384 GB (AWS EBS volume size limits)."
+  }
 }
 
 variable "routes" {
@@ -205,6 +233,24 @@ variable "routes" {
     )
   )
   default = []
+  validation {
+    condition = alltrue(
+      [
+        for route in var.routes : can(
+          regex(
+            "^([0-9]{1,3}\\.){3}[0-9]{1,3}$",
+            route.network
+          )
+          ) && can(
+          regex(
+            "^([0-9]{1,3}\\.){3}[0-9]{1,3}$",
+            route.netmask
+          )
+        )
+      ]
+    )
+    error_message = "All routes must have valid IPv4 format for both network and netmask (e.g., network: \"10.0.0.0\", netmask: \"255.0.0.0\")."
+  }
 }
 
 variable "service_name" {
@@ -259,6 +305,10 @@ variable "users" {
 variable "zone_id" {
   description = "Domain name zone ID where the website will be available"
   type        = string
+  validation {
+    condition     = can(regex("^Z[A-Z0-9]+$", var.zone_id))
+    error_message = "The zone_id must be a valid Route53 hosted zone ID (format: Z followed by alphanumeric characters)."
+  }
 }
 
 variable "sns_topic_alarm_arn" {
