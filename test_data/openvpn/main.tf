@@ -16,6 +16,7 @@ module "openvpn" {
   zone_id                      = data.aws_route53_zone.test-zone.zone_id
   asg_min_size                 = 1
   asg_max_size                 = 1
+  instance_type                = "t3a.small" # Use smaller instance type for tests
   portal-image                 = "${data.aws_caller_identity.this.account_id}.dkr.ecr.${var.region}.amazonaws.com/portal:latest"
   google_oauth_client_writer   = tolist(data.aws_iam_roles.sso-admin.arns)[0]
   alb_access_log_force_destroy = true

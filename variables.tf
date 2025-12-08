@@ -117,12 +117,12 @@ variable "google_oauth_client_writer" {
 }
 
 variable "instance_type" {
-  description = "Instance type to run the OpenVPN instances"
+  description = "Instance type to run the OpenVPN instances. Compute-optimized instances (c6in family) are recommended for CPU-intensive VPN encryption workloads."
   type        = string
-  default     = "m6in.large"
+  default     = "c6in.large"
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]+\\.[a-z0-9]+$", var.instance_type))
-    error_message = "The instance_type must be a valid EC2 instance type (e.g., t3.micro, m6in.large, c5.xlarge)."
+    error_message = "The instance_type must be a valid EC2 instance type (e.g., t3.micro, c6in.large, m6in.large)."
   }
 }
 
@@ -172,6 +172,18 @@ variable "portal_workers_count" {
   description = "Number of unicorn workers in OpenVPN portal"
   type        = number
   default     = 4
+}
+
+variable "portal_task_min_count" {
+  description = "Minimum number of ECS tasks for the OpenVPN portal service. Defaults to the number of backend subnets for high availability."
+  type        = number
+  default     = null
+}
+
+variable "portal_task_max_count" {
+  description = "Maximum number of ECS tasks for the OpenVPN portal service. Defaults to portal_task_min_count + 1."
+  type        = number
+  default     = null
 }
 
 variable "puppet_custom_facts" {
@@ -343,5 +355,25 @@ variable "cloudwatch_log_retention_days" {
       1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653, 0
     ], var.cloudwatch_log_retention_days)
     error_message = "The cloudwatch_log_retention_days must be a valid CloudWatch Logs retention period (1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653, or 0 for never expire)."
+  }
+}
+
+variable "autoscaling_target_cpu" {
+  description = "Target CPU utilization percentage for autoscaling. Applied to both OpenVPN ASG and Portal ECS service."
+  type        = number
+  default     = 60
+  validation {
+    condition     = var.autoscaling_target_cpu > 0 && var.autoscaling_target_cpu <= 100
+    error_message = "The autoscaling_target_cpu must be between 1 and 100."
+  }
+}
+
+variable "autoscaling_target_network_percentage" {
+  description = "Target network utilization as a percentage of the instance type's baseline bandwidth. Used for OpenVPN ASG network-based autoscaling."
+  type        = number
+  default     = 60
+  validation {
+    condition     = var.autoscaling_target_network_percentage > 0 && var.autoscaling_target_network_percentage <= 100
+    error_message = "The autoscaling_target_network_percentage must be between 1 and 100."
   }
 }

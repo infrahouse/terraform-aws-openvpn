@@ -20,11 +20,8 @@ module "openvpn-portal" {
   healthcheck_path                          = "/status"
   healthcheck_response_code_matcher         = "200"
   idle_timeout                              = 600
-  task_desired_count                        = 1
-  task_min_count                            = 1
-  task_max_count                            = 1
-  asg_min_size                              = 1
-  asg_max_size                              = 1
+  task_min_count                            = local.portal_task_min_count
+  task_max_count                            = local.portal_task_max_count
   on_demand_base_capacity                   = var.on_demand_base_capacity
   asg_instance_type                         = var.portal_instance_type
   container_cpu                             = 400 # One vCPU is 1024
