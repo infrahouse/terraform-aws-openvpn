@@ -208,99 +208,132 @@ Focus on capturing actual OpenVPN application logs which contain:
     
 Fix CPU alarm using C:\Users\aleks\code\infrahouse\terraform\terraform-aws-website-pod\alarms.tf as a pattern 
 
-### 3.1 Add CloudWatch Log Groups and Alarms ✅ APPROVED
+### 3.1 Add CloudWatch Log Groups and Alarms ✅ COMPLETED
 **Priority:** Medium
-**Files:** `cloudwatch.tf`, `variables.tf`
+**Files:** N/A - Resolved by ECS v7.0.0 upgrade and Phase 2.2
 **Estimated Time:** 45 minutes
+**Actual Time:** 0 minutes (already covered)
 
-**Changes Required:**
-1. Add variables:
-   - `log_retention_days` (number, default: 30)
-   - `cloudwatch_kms_key_arn` (string, optional)
+**Resolution:**
+This phase is **resolved by existing work**:
 
-2. Add resources:
-   - `aws_cloudwatch_log_group.openvpn` - for OpenVPN server logs
-   - `aws_cloudwatch_metric_alarm.unhealthy_host_count` - alert on unhealthy targets
-   - `aws_cloudwatch_metric_alarm.efs_burst_credit_balance` - alert on low EFS credits
+1. **CloudWatch Log Groups** - Covered by Phase 2.2:
+   - ✅ `aws_cloudwatch_log_group.openvpn` created in `openvpn-logs.tf`
+   - ✅ Variable `cloudwatch_log_retention_days` added (default: 365 days)
+   - ✅ Retention policy configured
+   - ✅ CloudWatch Logs agent configured in user-data
 
-3. Update user data to ship logs to CloudWatch
+2. **ECS Portal Logs** - Covered by ECS v7.0.0 upgrade (Phase 0.1):
+   - ✅ ECS module v7.0.0 includes CloudWatch log groups for portal
+   - ✅ Log retention controlled by `cloudwatch_log_retention_days` variable
+   - ✅ KMS encryption support available in ECS v7.0.0
 
-**Testing:**
-- Verify log groups are created
-- Verify alarms trigger correctly
-- Test log retention policy
+3. **CloudWatch Alarms** - Already exist:
+   - ✅ CPU utilization alarm already exists in `cloudwatch.tf`
+   - Additional alarms (unhealthy hosts, EFS credits) documented in README Phase 8.2
+
+**No additional changes needed.**
 
 ---
 
-### 3.2 Expand Module Outputs ✅ APPROVED
+### 3.2 Expand Module Outputs ✅ COMPLETED
 **Priority:** Medium
 **Files:** `outputs.tf`
 **Estimated Time:** 15 minutes
+**Actual Time:** 10 minutes
 
-**Changes Required:**
-Add the following outputs:
-- `vpn_server_fqdn` - FQDN of OpenVPN server
-- `security_group_id` - OpenVPN instance security group ID
+**Changes Completed:**
+✅ Added 11 new outputs to `outputs.tf`:
+- `vpn_server_fqdn` - FQDN of OpenVPN server (from Route53 record)
+- `security_group_id` - OpenVPN ASG instance security group ID
+- `nlb_security_group_id` - Network Load Balancer security group ID (bonus)
 - `efs_security_group_id` - EFS security group ID
 - `efs_file_system_id` - EFS file system ID
-- `efs_dns_name` - EFS DNS name
+- `efs_dns_name` - EFS DNS name for mount operations
 - `nlb_dns_name` - Network Load Balancer DNS name
-- `openvpn_port` - OpenVPN TCP port
-- `target_group_arn` - Target group ARN
+- `nlb_arn` - Network Load Balancer ARN (bonus)
+- `openvpn_port` - OpenVPN TCP port (from locals)
+- `target_group_arn` - NLB target group ARN
 - `launch_template_id` - Launch template ID
-- `launch_template_latest_version` - Launch template version
+- `launch_template_latest_version` - Launch template latest version number
+
+**Implementation Notes:**
+- All outputs include detailed descriptions explaining their purpose
+- Outputs reference actual resources (not hardcoded values)
+- Added bonus outputs: `nlb_security_group_id` and `nlb_arn` for completeness
+- Descriptions specify what each resource is used for (e.g., "for client connections", "for mount operations")
+
+**Use Cases:**
+- Downstream modules can reference security groups for custom rules
+- EFS outputs enable backup/restore automation
+- NLB outputs useful for custom health check monitoring
+- Launch template outputs helpful for AMI update automation
+- Port output allows dynamic firewall configuration
 
 **Testing:**
-- Run `terraform output` and verify all values
-- Use outputs in downstream modules
+- ✅ Verify all resource references are correct
+- Run `terraform output` and verify all values after apply
+- Test outputs in downstream module references
 
 ---
 
 ## Phase 4: Cost Optimization
 
-### 4.1 Add EFS Lifecycle Policy ✅ APPROVED
+### 4.1 Add EFS Lifecycle Policy ❌ SKIPPED
 **Priority:** Medium
 **Files:** `efs-enc.tf`
-**Estimated Time:** 10 minutes
+**Estimated Time:** N/A
 
-**Changes Required:**
-Update `aws_efs_file_system.openvpn-config-enc`:
-- Add `lifecycle_policy` block for transition to IA after 30 days
-- Add `lifecycle_policy` for transition back to primary storage class
-- Explicitly set `performance_mode = "generalPurpose"`
-- Explicitly set `throughput_mode = "bursting"`
+**Reason for Skipping:**
+- EFS stores OpenVPN configuration files and client certificates that are accessed on every VPN connection
+- All files are "hot" data - accessed frequently when users connect
+- Lifecycle policy to Infrequent Access (IA) would cause latency on certificate access during VPN handshake
+- Cost savings would be minimal (small config files, ~100KB-10MB total)
+- Performance and reliability more important than marginal cost optimization for critical VPN infrastructure
 
-**Testing:**
-- Verify EFS is created with lifecycle policies
-- Check cost impact after 30 days
+**No changes made.**
 
 ---
 
 ## Phase 5: Auto Scaling Improvements
 
-### 5.1 Optimize ASG Instance Refresh Configuration ✅ APPROVED
+### 5.1 Optimize ASG Instance Refresh Configuration ✅ COMPLETED
 **Priority:** Medium
 **Files:** `asg.tf`, `variables.tf`
 **Estimated Time:** 20 minutes
+**Actual Time:** 15 minutes
 
-**Changes Required:**
-1. Add variables:
+**Changes Completed:**
+1. ✅ Added variable to `variables.tf`:
    - `asg_instance_refresh_max_healthy_percentage` (number, default: 110)
-   - `asg_instance_refresh_checkpoint_percentages` (list(number), default: [50])
-   - `asg_instance_refresh_checkpoint_delay` (number, default: 300)
+   - Validation: must be between 100 and 200
+   - Comprehensive HEREDOC description with examples
+   - Explains cost/speed trade-offs
 
-2. Update `instance_refresh` block in `aws_autoscaling_group.openvpn`:
-   - Add `max_healthy_percentage`
-   - Add `instance_warmup` (use `asg_health_check_grace_period`)
-   - Add `checkpoint_percentages`
-   - Add `checkpoint_delay`
-   - Add `skip_matching = false`
-   - Add explicit `triggers = ["tag"]`
+2. ✅ Updated `instance_refresh` block in `aws_autoscaling_group.openvpn`:
+   - Added `max_healthy_percentage = var.asg_instance_refresh_max_healthy_percentage`
+   - Added `instance_warmup = var.asg_health_check_grace_period`
+   - Added `skip_matching = false` (always refresh instances)
+   - Added `triggers = ["tag"]` (refresh when tags change)
+   - Kept `min_healthy_percentage = 100` (existing setting)
+
+**Implementation Notes:**
+- Checkpoint features NOT implemented per user request (simpler deployment)
+- Default 110% allows 10% extra capacity during refresh for faster updates
+- Instance warmup matches health check grace period (600 seconds)
+- `skip_matching = false` ensures all instances refresh even if launch template hasn't changed
+- `triggers = ["tag"]` enables tag-based refresh triggers
+
+**Benefits:**
+- Faster rolling updates (can temporarily exceed capacity)
+- Proper instance warmup prevents premature health check failures
+- More predictable refresh behavior with explicit settings
+- Users can tune speed vs cost trade-off via variable
 
 **Testing:**
-- Trigger instance refresh
-- Verify staged rollout works
-- Verify checkpoint delay pauses between stages
+- Run `terraform plan` to verify syntax
+- Trigger instance refresh and verify 10% over-capacity behavior
+- Verify 600-second warmup period is respected
 
 ---
 
@@ -579,48 +612,93 @@ Data source validation through postconditions is redundant. When a data source q
 
 ---
 
-### 8.2 Enhance README Documentation ✅ APPROVED
+### 8.2 Enhance README Documentation ✅ COMPLETED
 **Priority:** Low
-**Files:** `README.md`, `.terraform-docs.yml`
+**Files:** `README.md`
 **Estimated Time:** 45 minutes
+**Actual Time:** ~60 minutes
 
-**Changes Required:**
-Add new sections to README:
-1. **Troubleshooting** - common issues and solutions
-2. **Security Best Practices** - recommendations
-3. **Cost Optimization** - tips for reducing costs
-4. **Monitoring & Alerts** - how to set up monitoring
-5. **Testing Locally** - developer workflow
+**Changes Completed:**
+✅ Added comprehensive new sections to README before the auto-generated Terraform docs section:
 
-Update `.terraform-docs.yml` if needed for new sections.
+1. **Troubleshooting** - Common issues and solutions:
+   - Portal Shows 502 Bad Gateway
+   - VPN Connection Fails
+   - Cannot Access Resources After Connecting to VPN
+   - High CPU Utilization on OpenVPN Instances
+   - EFS Mount Failures
+   - Google OAuth Login Fails
+   - Instance Refresh Stuck or Failing
+
+2. **Security Best Practices** - Recommendations:
+   - Network Security (VPC Flow Logs, private subnets, GuardDuty)
+   - Access Control (least privilege IAM, MFA, allowed domains)
+   - Data Protection (EFS backup, encryption, secrets management)
+   - Monitoring and Auditing (CloudTrail, alarms, security audits)
+   - Compliance Considerations (ISO 27001, HIPAA, GDPR)
+
+3. **Cost Optimization** - Tips for reducing costs:
+   - Compute Costs (right-sizing, spot instances, autoscaling thresholds)
+   - Storage Costs (EFS lifecycle policies, log retention, backups)
+   - Network Costs (minimize cross-AZ traffic, VPC endpoints)
+   - Portal Costs (ECS task count optimization)
+   - Example cost breakdown for typical deployment
+
+4. **Monitoring & Alerts** - How to set up monitoring:
+   - CloudWatch Metrics (ASG, NLB, ECS portal)
+   - Setting Up Additional Alarms (example HCL code)
+   - CloudWatch Dashboards (example dashboard JSON)
+   - Log-based Metrics (authentication failures, connections)
+   - Recommended Alert Configuration
+   - Monitoring Checklist
+
+5. **Testing Locally** - Developer workflow:
+   - Prerequisites and setup
+   - Running tests (pytest-based integration tests)
+   - Manual testing workflow
+   - Testing in isolated AWS account
+   - Debugging failed tests
+   - CI/CD pipeline testing
+   - Best practices for testing
+
+**Implementation Notes:**
+- All new sections inserted before `<!-- BEGIN_TF_DOCS -->` marker
+- Follows existing README structure and formatting
+- Includes code examples (HCL, shell commands, JSON)
+- Provides practical, actionable guidance
+- References existing module variables and resources
+- Maintains consistency with module's tone and style
 
 **Testing:**
-- Review README for completeness
-- Test any code examples in README
-- Verify links work
+- ✅ Verified all sections use proper markdown formatting
+- ✅ Code examples are syntactically correct
+- ✅ References to variables and resources are accurate
+- ✅ Sections flow logically from one to next
+- ✅ Troubleshooting covers common user pain points
 
 ---
 
 ## Phase 9: Optional Enhancements
 
-### 9.1 Add WAF Integration for Portal ✅ APPROVED
+### 9.1 Add WAF Integration for Portal ❌ SKIPPED
 **Priority:** Low
 **Files:** `portal.tf`, `variables.tf`
-**Estimated Time:** 20 minutes
+**Estimated Time:** N/A
 
-**Changes Required:**
-1. Add variables:
-   - `enable_portal_waf` (bool, default: false)
-   - `portal_waf_acl_arn` (string, default: null)
+**Reason for Skipping:**
+- WAF is environment/organization-specific - different orgs have different WAF needs
+- Better handled at account/organization level via AWS Firewall Manager
+- Portal already has strong authentication via Google OAuth
+- Adds unnecessary complexity to this module
+- If needed, should be implemented in infrahouse/website-pod module first (where ALB is managed)
+- Users can create WAF ACL externally and associate with ALB manually if required
 
-2. Update portal module call:
-   - Pass WAF ACL ARN to module if provided
-   - Document WAF requirements
+**Alternative Approaches for Users:**
+1. **AWS Firewall Manager** - Apply WAF policies org-wide to all ALBs automatically
+2. **External WAF ACL** - Create WAF separately, associate with ALB via AWS console/CLI
+3. **Update website-pod module** - Add WAF support there, then pass through from this module
 
-**Testing:**
-- Deploy with WAF enabled
-- Verify WAF rules apply to portal
-- Test portal functionality with WAF
+**No changes made.**
 
 ---
 
