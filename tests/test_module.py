@@ -18,9 +18,9 @@ from tests.conftest import (
 )
 
 
-def test_cloudwatch_logging(asg, boto3_session, aws_region):
+def verify_cloudwatch_logging(asg, boto3_session, aws_region):
     """
-    Test CloudWatch logging end-to-end integration for OpenVPN instances.
+    Verify CloudWatch logging end-to-end integration for OpenVPN instances.
 
     Validates:
     1. CloudWatch log group is configured via Puppet facts
@@ -319,7 +319,7 @@ def test_module(
             region=aws_region,
             role_arn=test_role_arn,
         )
-        test_cloudwatch_logging(
+        verify_cloudwatch_logging(
             asg=asg,
             boto3_session=boto3_session,
             aws_region=aws_region,
