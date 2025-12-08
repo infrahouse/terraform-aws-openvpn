@@ -1,0 +1,63 @@
+# Checkov configuration for terraform-aws-openvpn module
+# Skips checks that are not applicable or intentionally handled differently
+
+framework:
+  - terraform
+
+# Suppress specific checks
+skip-check:
+  # CKV_TF_1: Module sources use version pins from private registry (better than commit hashes)
+  # Using semantic versioning from registry.infrahouse.com provides better maintainability
+  - CKV_TF_1
+
+  # CKV_AWS_166: Backup vault uses AWS-managed encryption (sufficient for compliance)
+  # EFS source is encrypted with AWS-managed key, backups inherit that encryption
+  # CMK not required for Vanta/ISO 27001 compliance
+  - CKV_AWS_166
+
+  # CKV_AWS_150: NLB deletion protection disabled by default for flexibility
+  # Enables easy cleanup in dev/test environments and Terraform destroy operations
+  # Production environments should use AWS SCPs/IAM policies for deletion protection
+  - CKV_AWS_150
+
+  # CKV_AWS_91: NLB access logs intentionally disabled (not useful for OpenVPN)
+  # NLB is Layer 4 TCP passthrough - logs only show TCP metadata, not OpenVPN sessions
+  # OpenVPN application logs shipped to CloudWatch provide actual compliance data:
+  # - User authentication events, connection duration, data transfer
+  # - VPC Flow Logs already capture network-level connection metadata
+  # NLB logs would be redundant and provide no additional compliance value
+  - CKV_AWS_91
+
+  # CKV_AWS_158: CloudWatch Logs use AWS-managed encryption (sufficient for compliance)
+  # CloudWatch Logs are encrypted at rest by default using AWS-managed keys (SSE)
+  # Logs contain connection metadata and auth events (no PII, credentials, or payment data)
+  # CMK not required for Vanta/ISO 27001 compliance
+  - CKV_AWS_158
+
+  # CKV_AWS_277: ICMP allowed on NLB for Path MTU Discovery and troubleshooting
+  # NLB is public-facing and ICMP helps diagnose connectivity issues
+  # ICMP on port -1 is standard for allowing all ICMP types (ping, traceroute, etc.)
+  # Risk is low: ICMP only reveals endpoint availability, no data leakage
+  - CKV_AWS_277
+
+  # CKV_AWS_163: ECR image scanning check is outdated
+  # AWS Inspector (enabled at account level) provides superior continuous scanning
+  # Inspector scans ECR automatically - no per-repository configuration needed
+  # Legacy ECR scan-on-push is replaced by Inspector's continuous monitoring
+  - CKV_AWS_163
+
+  # CKV_AWS_136: Test ECR uses AWS-managed encryption (sufficient for test infrastructure)
+  # Test ECR in test_data/openvpn/ecr.tf is only used during automated testing
+  # Production deployments use public.ecr.aws/infrahouse/openvpn-portal
+  # AWS-managed encryption is sufficient for test images
+  - CKV_AWS_136
+
+  # CKV_AWS_51: Test ECR allows mutable tags for development flexibility
+  # Test ECR in test_data/openvpn/ecr.tf is only used during automated testing
+  # Mutable tags allow overwriting 'latest' during test iterations
+  # Production deployments use versioned public images
+  - CKV_AWS_51
+
+# Output configuration
+compact: true
+quiet: false

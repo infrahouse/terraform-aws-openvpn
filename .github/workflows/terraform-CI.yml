@@ -60,6 +60,11 @@ jobs:
       - name: Code Style Check
         run: make lint
 
+      # Run Checkov security scan
+      - name: Checkov Security Scan
+        run: |
+          checkov -d . --config-file .checkov.yml
+
       # Generates an execution plan for Terraform
       - name: Terraform Tests
         run: make test

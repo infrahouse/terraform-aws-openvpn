@@ -8,7 +8,7 @@ resource "aws_lb" "openvpn" {
   subnets                          = var.lb_subnet_ids
   enable_cross_zone_load_balancing = true
   security_groups = [
-    aws_security_group.openvpn.id
+    aws_security_group.nlb.id
   ]
   tags = merge(
     local.default_module_tags,
