@@ -599,3 +599,25 @@ variable "autoscaling_target_network_percentage" {
     error_message = "The autoscaling_target_network_percentage must be between 1 and 100."
   }
 }
+
+variable "enable_efs_backup" {
+  description = "Enable AWS Backup for EFS file system containing OpenVPN configuration and certificates."
+  type        = bool
+  default     = true
+}
+
+variable "efs_backup_schedule" {
+  description = "Cron expression for EFS backup schedule. Default: daily at 2 AM UTC (cron(0 2 * * ? *))."
+  type        = string
+  default     = "cron(0 2 * * ? *)"
+}
+
+variable "efs_backup_retention_days" {
+  description = "Number of days to retain EFS backups. Default: 365 days (matches log retention for compliance)."
+  type        = number
+  default     = 365
+  validation {
+    condition     = var.efs_backup_retention_days >= 1
+    error_message = "The efs_backup_retention_days must be at least 1 day."
+  }
+}

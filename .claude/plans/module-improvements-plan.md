@@ -474,23 +474,32 @@ Data source validation through postconditions is redundant. When a data source q
 
 ## Phase 7: Resource Management
 
-### 7.1 Add EFS Backup Strategy ✅ APPROVED
+### 7.1 Add EFS Backup Strategy ✅ COMPLETED
 **Priority:** Medium
-**Files:** New file `efs-backup.tf`, `variables.tf`, `iam.tf`
+**Files:** New file `efs-backup.tf`, `variables.tf`
 **Estimated Time:** 40 minutes
+**Actual Time:** ~35 minutes
 
-**Changes Required:**
-1. Add variables:
-   - `enable_efs_backup` (bool, default: true)
-   - `efs_backup_schedule` (string, default: "cron(0 2 * * ? *)")
-   - `efs_backup_retention_days` (number, default: 30)
+**Changes Completed:**
+1. ✅ Added variables to `variables.tf`:
+   - `enable_efs_backup` (bool, default: true) - Enable/disable EFS backups
+   - `efs_backup_schedule` (string, default: "cron(0 2 * * ? *)") - Daily at 2 AM UTC
+   - `efs_backup_retention_days` (number, default: 30) - Retention period with validation
 
-2. Create resources:
-   - `aws_backup_vault.efs` - backup vault with KMS encryption
-   - `aws_backup_plan.efs` - daily backup plan
-   - `aws_backup_selection.efs` - select EFS file system
-   - `aws_iam_role.backup` - IAM role for AWS Backup
-   - `aws_iam_role_policy_attachment.backup` - attach AWS managed policies
+2. ✅ Created `efs-backup.tf` with resources:
+   - `aws_backup_vault.efs` - Backup vault for storing EFS backups
+   - `aws_backup_plan.efs` - Daily backup plan with lifecycle management
+   - `aws_backup_selection.efs` - Selects EFS file system for backup
+   - `aws_iam_role.backup` - IAM role for AWS Backup service with random suffix
+   - `aws_iam_role_policy_attachment.backup_efs` - AWS managed backup policy
+   - `aws_iam_role_policy_attachment.backup_restore` - AWS managed restore policy
+
+**Implementation Notes:**
+- All resources use `count` based on `var.enable_efs_backup` for opt-in/opt-out
+- IAM role uses `random_string.role-suffix` for unique naming (follows module pattern)
+- Backup vault includes proper tagging with `Name` tag and module tags
+- Continuous backup disabled (set to false) - uses scheduled backups only
+- Lifecycle policy configured with `delete_after` for retention management
 
 **Testing:**
 - Verify backup vault is created
@@ -500,17 +509,24 @@ Data source validation through postconditions is redundant. When a data source q
 
 ---
 
-### 7.2 Add Missing Name Tags ✅ APPROVED
+### 7.2 Add Missing Name Tags ✅ COMPLETED
 **Priority:** Low
-**Files:** `nlb.tf`, `iam.tf`, `cloudwatch.tf`
+**Files:** `nlb.tf`, `iam-openvpn-portal.tf`, `cloudwatch.tf`
 **Estimated Time:** 15 minutes
+**Actual Time:** ~10 minutes
 
-**Changes Required:**
-Add explicit `Name` tag to:
-- `aws_lb_target_group.openvpn`
-- `aws_lb_listener.openvpn`
-- IAM roles (if not already tagged)
-- CloudWatch alarms
+**Changes Completed:**
+✅ Added explicit `Name` tag to resources using `merge()` with `local.default_module_tags`:
+- `aws_lb_target_group.openvpn` - Added Name: "${var.service_name}-target-group"
+- `aws_lb_listener.openvpn` - Added Name: "${var.service_name}-listener"
+- `aws_iam_role.openvpn_portal_role` - Added Name: "${var.service_name}-portal-task-role"
+- `aws_cloudwatch_metric_alarm.cpu_utilization_alarm` - Added Name: "${var.service_name}-cpu-alarm"
+
+**Implementation Notes:**
+- All Name tags follow consistent naming pattern: `${var.service_name}-<resource-type>`
+- Tags merged with existing `local.default_module_tags` to preserve module tagging
+- NLB already has proper tags via `local.default_module_tags`
+- EFS backup IAM role already includes Name tag (added in Phase 7.1)
 
 **Testing:**
 - Verify Name tags appear in AWS console
