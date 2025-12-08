@@ -5,7 +5,29 @@ variable "alb_access_log_force_destroy" {
 }
 
 variable "allowed_domains" {
-  description = "List of domains, authenticated users of which will be allowed to connect to VPN. The domain passed via var.zone_id will be added to the list"
+  description = <<-EOT
+    List of Google Workspace domains whose users are allowed to connect to the VPN.
+
+    The OpenVPN portal uses Google OAuth for authentication. Only users with email
+    addresses from the specified domains can authenticate and download VPN profiles.
+
+    Important notes:
+    - The domain from zone_id is AUTOMATICALLY added to this list
+    - For multi-domain support, your Google OAuth app must be "external" type
+    - Each domain must be verified in your Google Cloud Console
+    - Users must have active Google Workspace accounts
+
+    Example:
+    allowed_domains = [
+      "company.com",
+      "subsidiary.com"
+    ]
+
+    If zone_id points to example.com, the effective list will be:
+    ["example.com", "company.com", "subsidiary.com"]
+
+    Default: [] (only the zone domain is allowed)
+  EOT
   type        = list(string)
   default     = []
 }
@@ -17,7 +39,36 @@ variable "asg_ami" {
 }
 
 variable "asg_health_check_grace_period" {
-  description = "ASG will wait up to this number of minutes for instance to become healthy"
+  description = <<-EOT
+    Auto Scaling Group health check grace period in seconds.
+
+    This is the time AWS waits after instance launch before checking health status.
+    During this period, instances won't be terminated even if they fail health checks.
+
+    Why 600 seconds (10 minutes)?
+    The OpenVPN server bootstrap process includes:
+    1. Cloud-init package installation (~2-3 minutes)
+    2. Puppet run to configure OpenVPN (~3-4 minutes)
+    3. OpenVPN service startup (~30 seconds)
+    4. EFS mount and certificate generation (~1-2 minutes)
+    5. Network Load Balancer health check stabilization (~1 minute)
+
+    Typical bootstrap time: 7-8 minutes
+    Grace period provides 2-3 minute buffer for slower instances or high network latency.
+
+    When to increase this value:
+    - Custom packages in var.packages that take long to install
+    - Complex Puppet manifests (var.puppet_manifest)
+    - Large EFS volumes with many existing certificates
+    - Regions with slower package mirror speeds
+
+    When to decrease this value:
+    - Using pre-baked AMIs (var.asg_ami) with packages pre-installed
+    - Minimal Puppet configuration
+    - Fast bootstrap observed in testing
+
+    Default: 600 seconds (10 minutes)
+  EOT
   type        = number
   default     = 600
 }
@@ -35,7 +86,23 @@ variable "asg_max_size" {
 }
 
 variable "backend_subnet_ids" {
-  description = "List of subnet ids where the webserver and database instances will be created"
+  description = <<-EOT
+    List of private subnet IDs where OpenVPN server instances and Portal ECS tasks will be deployed.
+
+    Requirements:
+    - Minimum 2 subnets (AWS high availability best practice)
+    - Must be in different availability zones
+    - Should have outbound internet access (via NAT Gateway) for package installation
+    - Used for both OpenVPN EC2 instances and Portal ECS tasks
+
+    The number of subnets determines default values for:
+    - portal_task_min_count (defaults to length of this list)
+    - asg_min_size (defaults to length of this list)
+
+    Example: ["subnet-12345678", "subnet-87654321"]
+
+    Required.
+  EOT
   type        = list(string)
   validation {
     condition     = length(var.backend_subnet_ids) >= 2
@@ -117,7 +184,46 @@ variable "google_oauth_client_writer" {
 }
 
 variable "instance_type" {
-  description = "Instance type to run the OpenVPN instances. Compute-optimized instances (c6in family) are recommended for CPU-intensive VPN encryption workloads."
+  description = <<-EOT
+    EC2 instance type for OpenVPN server instances.
+
+    Recommendation: c6in family (compute-optimized, network-optimized)
+
+    Why compute-optimized for VPN?
+    - OpenVPN encryption/decryption is CPU-intensive
+    - C-series instances provide better performance per dollar for VPN workloads
+    - Higher single-thread performance benefits VPN connection handling
+
+    Recommended instance types:
+    - c6in.large (DEFAULT): 2 vCPU, 4 GB RAM, 25 Gbps network - Best balance for production
+    - c6in.xlarge: 4 vCPU, 8 GB RAM, 30 Gbps network - High user count (>100 concurrent)
+    - c6in.2xlarge: 8 vCPU, 16 GB RAM, 40 Gbps network - Very high throughput needs
+    - t3a.small: 2 vCPU, 2 GB RAM, 5 Gbps network - Development/testing only
+
+    Instance type impacts autoscaling:
+    - var.autoscaling_target_network_percentage uses the instance's baseline network bandwidth
+    - Larger instances = higher network bandwidth threshold for autoscaling
+    - Example: c6in.large (25 Gbps) @ 60% = scales at 15 Gbps
+    - Example: c6in.xlarge (30 Gbps) @ 60% = scales at 18 Gbps
+
+    Cost comparison (us-east-1, on-demand):
+    - c6in.large: ~$82/month (RECOMMENDED)
+    - m6in.large: ~$102/month (general-purpose, 19% more expensive)
+    - t3a.small: ~$15/month (testing only, limited network performance)
+
+    Network performance:
+    - c6in family: 25-200 Gbps (network-optimized)
+    - m6in family: 25-200 Gbps (network-optimized)
+    - m7i family: Up to 12.5 Gbps (general-purpose)
+    - t3/t3a family: Up to 5 Gbps (burstable)
+
+    When to use different instance families:
+    - c6in: Best for production VPN (CPU + network optimized)
+    - m6in/m7i: If you need more RAM for additional services
+    - t3/t3a: Development, testing, or very low user count (<10 users)
+
+    Default: "c6in.large"
+  EOT
   type        = string
   default     = "c6in.large"
   validation {
@@ -127,13 +233,49 @@ variable "instance_type" {
 }
 
 variable "key_pair_name" {
-  description = "SSH keypair name to be deployed in EC2 instances"
+  description = <<-EOT
+    SSH keypair name for accessing OpenVPN server instances.
+
+    ⚠️  SECURITY WARNING:
+    - SSH access should be limited to emergency troubleshooting only
+    - Use AWS Systems Manager Session Manager for routine access instead
+    - Restrict security group to allow SSH only from trusted IP ranges
+    - Consider using short-lived SSH certificates instead of long-lived keys
+    - Rotate SSH keys regularly
+    - Monitor SSH access via CloudWatch and VPC Flow Logs
+
+    The key pair must exist in AWS before applying this module.
+
+    If not specified (null), the module will generate a temporary key pair.
+    However, for production use, you should provide a managed key pair.
+
+    Example: "my-openvpn-emergency-key"
+
+    Default: null (module generates a temporary key)
+  EOT
   type        = string
   default     = null
 }
 
 variable "lb_subnet_ids" {
-  description = "List of subnet ids where the load balancer will be created"
+  description = <<-EOT
+    List of public subnet IDs where the Network Load Balancer will be created.
+
+    Requirements:
+    - Minimum 2 subnets (AWS NLB requirement - must span at least 2 availability zones)
+    - Must be PUBLIC subnets with internet gateway route
+    - Must be in different availability zones
+    - These subnets host the NLB endpoints that VPN clients connect to
+
+    The NLB will:
+    - Accept VPN client connections on TCP port 1194
+    - Forward traffic to OpenVPN servers in backend_subnet_ids
+    - Have DNS name registered in Route53 zone
+
+    Example: ["subnet-public-1", "subnet-public-2"]
+
+    Required.
+  EOT
   type        = list(string)
   validation {
     condition     = length(var.lb_subnet_ids) >= 2
@@ -169,7 +311,39 @@ variable "portal_instance_type" {
 }
 
 variable "portal_workers_count" {
-  description = "Number of unicorn workers in OpenVPN portal"
+  description = <<-EOT
+    Number of Unicorn worker processes in the OpenVPN portal web application.
+
+    The portal runs as a Flask application served by Unicorn. Each worker process
+    can handle one request at a time. More workers = more concurrent users.
+
+    Recommended worker count by instance type:
+    - t3.nano / t3a.nano (2 vCPU, 0.5 GB RAM): 2 workers
+    - t3.small / t3a.small (2 vCPU, 2 GB RAM): 4 workers (DEFAULT)
+    - t3.medium (2 vCPU, 4 GB RAM): 4-6 workers
+    - t3.large (2 vCPU, 8 GB RAM): 6-8 workers
+
+    Formula: (2 x CPU cores) + 1
+    Example: t3.small (2 vCPU) = (2 x 2) + 1 = 5 workers (4 is conservative)
+
+    Memory per worker: ~150-200 MB
+    CPU per worker: ~0.5 vCPU under load
+
+    When to increase:
+    - High concurrent user count (>20 simultaneous logins)
+    - Slow authentication response times
+    - Using larger instance types (portal_instance_type)
+
+    When to decrease:
+    - Very small instance types (t3.nano)
+    - Low user count (<10 total users)
+    - Memory pressure in container logs
+
+    Note: More workers = more memory usage. Ensure portal_instance_type
+    has sufficient RAM. Monitor ECS task memory utilization in CloudWatch.
+
+    Default: 4 (suitable for t3.small with moderate user load)
+  EOT
   type        = number
   default     = 4
 }
@@ -235,7 +409,33 @@ variable "root_volume_size" {
 }
 
 variable "routes" {
-  description = "List of network/netmasks in format 10.x.x.x/255.x.x.x that need to be pushed to a client. [{network: \"10.0.0.0\", netmask: \"255.0.0.0\"}]"
+  description = <<-EOT
+    List of network routes to push to VPN clients.
+
+    These routes tell VPN clients which traffic should be sent through the VPN tunnel.
+    Commonly used to route RFC1918 private networks or specific application networks.
+
+    Format:
+    - network: Network address in IPv4 format (e.g., "10.0.0.0")
+    - netmask: Network mask in IPv4 format (e.g., "255.0.0.0")
+
+    Example:
+    routes = [
+      {
+        network = "10.0.0.0"
+        netmask = "255.0.0.0"
+      },
+      {
+        network = "172.16.0.0"
+        netmask = "255.240.0.0"
+      }
+    ]
+
+    Note: Routes are pushed to clients via OpenVPN configuration.
+    Clients will route matching traffic through the VPN tunnel.
+
+    Default: [] (no custom routes - only VPN subnet routed through tunnel)
+  EOT
   type = list(
     object(
       {
@@ -266,7 +466,18 @@ variable "routes" {
 }
 
 variable "service_name" {
-  description = "DNS hostname for the service. It's also used to name some resources like EC2 instances."
+  description = <<-EOT
+    Service name used for DNS hostname and resource naming.
+
+    This value is used to:
+    - Create the Route53 DNS record (e.g., openvpn.example.com)
+    - Name EC2 instances and other AWS resources
+    - Generate CloudWatch log group names (/aws/openvpn/{environment}/{service_name})
+    - Prefix autoscaling policy names
+
+    Default: "openvpn"
+  EOT
+  type        = string
   default     = "openvpn"
 }
 
@@ -315,7 +526,18 @@ variable "users" {
 }
 
 variable "zone_id" {
-  description = "Domain name zone ID where the website will be available"
+  description = <<-EOT
+    Route53 hosted zone ID where the OpenVPN service will be accessible.
+
+    The module will:
+    - Create an A record pointing to the Network Load Balancer
+    - Use the zone's domain name for DNS resolution (e.g., openvpn.example.com)
+    - Automatically add the zone's domain to allowed_domains for Google OAuth
+
+    Example: "Z1234567890ABC"
+
+    Required. Must be a valid Route53 hosted zone ID.
+  EOT
   type        = string
   validation {
     condition     = can(regex("^Z[A-Z0-9]+$", var.zone_id))
