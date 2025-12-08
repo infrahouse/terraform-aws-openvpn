@@ -48,6 +48,13 @@ resource "aws_iam_policy" "openvpn_portal_role" {
 resource "aws_iam_role" "openvpn_portal_role" {
   name_prefix        = "openvpn-portal-"
   assume_role_policy = data.aws_iam_policy_document.openvpn_portal_role_assume.json
+
+  tags = merge(
+    {
+      Name = "${var.service_name}-portal-task-role"
+    },
+    local.default_module_tags
+  )
 }
 
 resource "aws_iam_role_policy_attachment" "task_role" {

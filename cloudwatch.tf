@@ -13,4 +13,11 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization_alarm" {
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.openvpn.name
   }
+
+  tags = merge(
+    {
+      Name = "${var.service_name}-cpu-alarm"
+    },
+    local.default_module_tags
+  )
 }

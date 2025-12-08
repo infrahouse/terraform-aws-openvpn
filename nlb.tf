@@ -23,7 +23,12 @@ resource "aws_lb_target_group" "openvpn" {
   port        = local.openvpn_tcp_port
   protocol    = "TCP"
   vpc_id      = data.aws_vpc.selected.id
-  tags        = local.default_module_tags
+  tags = merge(
+    {
+      Name = "${var.service_name}-target-group"
+    },
+    local.default_module_tags
+  )
   stickiness {
     enabled = true
     type    = "source_ip"
@@ -38,7 +43,12 @@ resource "aws_lb_listener" "openvpn" {
   load_balancer_arn = aws_lb.openvpn.arn
   port              = local.openvpn_tcp_port
   protocol          = "TCP"
-  tags              = local.default_module_tags
+  tags = merge(
+    {
+      Name = "${var.service_name}-listener"
+    },
+    local.default_module_tags
+  )
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.openvpn.arn
