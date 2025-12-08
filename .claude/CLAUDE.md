@@ -42,7 +42,7 @@ and connect to access AWS resources in private subnets.
 
 ### Components
 1. **OpenVPN Server**
-    - Default instance type: `m6in.large`
+    - Default instance type: `c6in.large` (compute-optimized for VPN encryption workloads)
     - Runs on Ubuntu (configurable via `ubuntu_codename`, default: "noble")
     - Managed via Auto Scaling group
     - Stores config on EFS (encrypted)

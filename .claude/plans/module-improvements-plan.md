@@ -304,25 +304,85 @@ Update `aws_efs_file_system.openvpn-config-enc`:
 
 ---
 
-### 5.2 Add Auto Scaling Policies ✅ APPROVED
+### 5.2 Add Auto Scaling Policies ✅ COMPLETED
 **Priority:** Medium
-**Files:** `asg.tf`, `variables.tf`
-**Estimated Time:** 30 minutes
+**Files:** `asg.tf`, `datasources.tf`, `locals.tf`, `variables.tf`
+**Estimated Time:** 45 minutes
+**Actual Time:** ~60 minutes
 
-**Changes Required:**
+**Changes Completed:**
 1. Add variables:
-   - `enable_autoscaling` (bool, default: false)
-   - `autoscaling_target_cpu` (number, default: 70)
-   - `autoscaling_target_network_in` (number, default: 50000000) # 50 MB/s
+   - `autoscaling_target_cpu` (number, default: 60)
+     - **Changed from 70% to 60%** per user preference
+     - **Will be unified** across both ECS portal and VPN ASG (same value)
+   - `autoscaling_target_network_percentage` (number, default: 60)
+     - **New approach**: Instead of hardcoded bytes/sec, use percentage of instance type's baseline network bandwidth
+     - Default: 60% of instance type's network capacity
 
-2. Add resources:
-   - `aws_autoscaling_policy.cpu_target_tracking` - CPU-based scaling
-   - `aws_autoscaling_policy.network_target_tracking` - Network-based scaling
+2. Add data source in `datasources.tf`:
+   - `data.aws_ec2_instance_type.openvpn` - Query instance type network characteristics
+     - Queries AWS for instance type specifications
+     - Provides access to `network_cards[0].baseline_bandwidth_in_gbps`
+     - Real-time data from AWS API, no hardcoded values to maintain
+
+3. Add local value in `locals.tf`:
+   - `autoscaling_target_network_in` - Calculated value based on instance type
+     - Formula: `(data.aws_ec2_instance_type.openvpn.network_cards[0].baseline_bandwidth_in_gbps * 1000 * var.autoscaling_target_network_percentage / 100) * 1000000`
+     - Converts Gbps → Mbps → bytes/sec and applies percentage
+     - Uses real AWS data from ec2_instance_type data source
+
+3. Add resources:
+   - `aws_autoscaling_policy.cpu_target_tracking` - CPU-based scaling (60% target)
+   - `aws_autoscaling_policy.network_target_tracking` - Network-based scaling (calculated target)
+
+**Rationale for Network Bandwidth Approach:**
+- **Problem with hardcoded 50MB/s**: Not instance-type aware; too low for large instances, too high for small ones
+- **Why use aws_ec2_instance_type data source**:
+  - Provides real-time network bandwidth data directly from AWS API
+  - No hardcoded lookup tables to maintain
+  - Automatically supports new instance types
+  - AWS provides `baseline_bandwidth_in_gbps` for all production instance types
+  - If an instance type doesn't provide network bandwidth data, it may not be suitable for VPN workloads
+- **Benefits of percentage-based approach**:
+  - Scales automatically with instance type selection
+  - User can adjust percentage threshold via variable
+  - Zero maintenance - AWS provides the data
+  - Self-documenting - uses official AWS instance type specifications
+
+**Implementation Example:**
+```hcl
+# datasources.tf
+data "aws_ec2_instance_type" "openvpn" {
+  instance_type = var.instance_type
+}
+
+# locals.tf
+locals {
+  # Calculate network autoscaling target based on instance type
+  # Formula: (baseline_gbps * 1000 to get Mbps * percentage / 100) * 1000000 to get bytes/sec
+  autoscaling_target_network_in = (
+    data.aws_ec2_instance_type.openvpn.network_cards[0].baseline_bandwidth_in_gbps * 1000
+    * var.autoscaling_target_network_percentage / 100
+  ) * 1000000
+}
+```
+
+**Example Values:**
+- c6in.large (25 Gbps baseline) @ 60% = 15 Gbps = 15,000,000,000 bytes/sec
+- t3a.small (5 Gbps baseline) @ 60% = 3 Gbps = 3,000,000,000 bytes/sec
+- m7i.large (12.5 Gbps baseline) @ 60% = 7.5 Gbps = 7,500,000,000 bytes/sec
+
+**ECS Portal Autoscaling:**
+- Update existing ECS portal autoscaling target to use same `var.autoscaling_target_cpu` (60%)
+- Keeps CPU threshold unified across both services
 
 **Testing:**
+- Test with default values (60% CPU, 60% of network bandwidth)
+- Test with different instance types (verify network target adjusts)
 - Generate CPU load and verify scaling
 - Generate network traffic and verify scaling
 - Verify scale-down works
+- Test with custom variable values
 
 ---
 

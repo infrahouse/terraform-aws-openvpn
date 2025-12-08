@@ -157,3 +157,71 @@ resource "aws_autoscaling_group" "openvpn" {
     aws_efs_mount_target.openvpn-config-enc
   ]
 }
+
+# CPU-based autoscaling policy for OpenVPN ASG
+resource "aws_autoscaling_policy" "cpu_target_tracking" {
+  name                   = "${var.service_name}-cpu-target-tracking"
+  autoscaling_group_name = aws_autoscaling_group.openvpn.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = var.autoscaling_target_cpu
+  }
+}
+
+# Network-based autoscaling policy for OpenVPN ASG
+# Uses instance type's baseline network bandwidth to calculate target
+# Tracks both NetworkIn and NetworkOut, scales when either direction hits the threshold
+resource "aws_autoscaling_policy" "network_target_tracking" {
+  name                   = "${var.service_name}-network-target-tracking"
+  autoscaling_group_name = aws_autoscaling_group.openvpn.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    customized_metric_specification {
+      # NetworkIn metric - used for calculation only, not returned
+      metrics {
+        id = "m1"
+        metric_stat {
+          metric {
+            namespace   = "AWS/EC2"
+            metric_name = "NetworkIn"
+            dimensions {
+              name  = "AutoScalingGroupName"
+              value = aws_autoscaling_group.openvpn.name
+            }
+          }
+          stat = "Average"
+        }
+        return_data = false
+      }
+      # NetworkOut metric - used for calculation only, not returned
+      metrics {
+        id = "m2"
+        metric_stat {
+          metric {
+            namespace   = "AWS/EC2"
+            metric_name = "NetworkOut"
+            dimensions {
+              name  = "AutoScalingGroupName"
+              value = aws_autoscaling_group.openvpn.name
+            }
+          }
+          stat = "Average"
+        }
+        return_data = false
+      }
+      # Return the maximum of NetworkIn and NetworkOut
+      # This ensures we scale when EITHER direction is saturated
+      metrics {
+        id          = "e1"
+        expression  = "MAX([m1,m2])"
+        return_data = true
+      }
+    }
+    target_value = local.autoscaling_target_network
+  }
+}

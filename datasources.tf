@@ -67,3 +67,8 @@ data "aws_ami" "selected" {
 data "aws_kms_key" "efs_default" {
   key_id = "alias/aws/elasticfilesystem"
 }
+
+# Query instance type characteristics for autoscaling network bandwidth calculations
+data "aws_ec2_instance_type" "openvpn" {
+  instance_type = var.instance_type
+}
