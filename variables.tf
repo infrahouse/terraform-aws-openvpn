@@ -85,6 +85,34 @@ variable "asg_max_size" {
   default     = null
 }
 
+variable "asg_instance_refresh_max_healthy_percentage" {
+  description = <<-EOT
+    Maximum percentage of healthy instances during ASG instance refresh rolling updates.
+
+    Controls how many extra instances can be launched during instance refresh:
+    - 100 = No extra instances (replace one-by-one)
+    - 110 = Allow 10% extra instances (DEFAULT - enables faster updates)
+    - 200 = Allow double capacity during refresh
+
+    Higher values enable faster updates but temporarily increase costs.
+    Lower values reduce costs but slow down deployments.
+
+    Example with asg_min_size=2, asg_max_size=4:
+    - 100%: Replace 1 at a time (max 2 instances total)
+    - 110%: Can temporarily have 2.2 instances (rounds up to 3)
+    - 200%: Can temporarily have 4 instances during refresh
+
+    Default: 110 (recommended balance of speed and cost)
+  EOT
+  type        = number
+  default     = 110
+
+  validation {
+    condition     = var.asg_instance_refresh_max_healthy_percentage >= 100 && var.asg_instance_refresh_max_healthy_percentage <= 200
+    error_message = "The asg_instance_refresh_max_healthy_percentage must be between 100 and 200."
+  }
+}
+
 variable "backend_subnet_ids" {
   description = <<-EOT
     List of private subnet IDs where OpenVPN server instances and Portal ECS tasks will be deployed.

@@ -134,7 +134,11 @@ resource "aws_autoscaling_group" "openvpn" {
     strategy = "Rolling"
     preferences {
       min_healthy_percentage = 100
+      max_healthy_percentage = var.asg_instance_refresh_max_healthy_percentage
+      instance_warmup        = var.asg_health_check_grace_period
+      skip_matching          = false
     }
+    triggers = ["tag"]
   }
   tag {
     key                 = "Name"

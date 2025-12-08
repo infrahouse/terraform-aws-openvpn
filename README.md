@@ -479,6 +479,983 @@ For **ISO 27001** or other compliance frameworks:
 4. ✅ **Regular log reviews** using CloudWatch Logs Insights
 5. ✅ **Export to S3** for long-term archival (if retention > 3653 days required)
 
+## Troubleshooting
+
+### Portal Shows 502 Bad Gateway
+
+**Symptoms:** Accessing https://openvpn-portal.yourcompany.com returns a 502 error.
+
+**Common causes:**
+1. **Google OAuth credentials not configured** - The most common issue after initial deployment
+   ```shell
+   # Check if the secret has a value
+   ih-secrets --aws-region us-west-1 --aws-profile YourProfile get google_client_XXXX
+   # If it returns "NoValue", follow Step 4 in the Installation section
+   ```
+
+2. **ECS tasks failing to start** - Check CloudWatch Logs for the portal service
+   ```shell
+   # View recent logs
+   aws logs tail /aws/ecs/openvpn-portal --follow --region us-west-1
+   ```
+
+3. **ALB target health check failures** - Verify targets are healthy
+   ```shell
+   # Check target group health
+   aws elbv2 describe-target-health --target-group-arn <target-group-arn> --region us-west-1
+   ```
+
+**Resolution:**
+- Ensure Google OAuth client secret is populated (see Installation Step 4)
+- Verify ECS tasks are running: `aws ecs list-tasks --cluster openvpn-portal --region us-west-1`
+- Check security groups allow traffic from ALB to ECS tasks
+
+### VPN Connection Fails
+
+**Symptoms:** OpenVPN client shows "Connection timeout" or "TLS handshake failed"
+
+**Common causes:**
+1. **Client profile outdated** - Download a fresh profile from the portal
+2. **Network Load Balancer unhealthy targets** - Check ASG instance health
+   ```shell
+   # Check NLB target health
+   aws elbv2 describe-target-health --target-group-arn <nlb-target-group-arn> --region us-west-1
+   ```
+
+3. **Security group misconfiguration** - Verify NLB security group allows port 1194
+   ```shell
+   # List security group rules for NLB
+   aws ec2 describe-security-groups --group-ids <nlb-sg-id> --region us-west-1
+   ```
+
+4. **EC2 instances not fully bootstrapped** - Check CloudWatch Logs for bootstrap errors
+   ```shell
+   # View instance logs
+   aws logs tail /aws/openvpn/development/openvpn --follow --region us-west-1
+   ```
+
+**Resolution:**
+- Download a new OpenVPN profile from the portal
+- Ensure NLB targets show "healthy" status
+- Verify ASG instances have passed health checks (wait 10-15 minutes after instance launch)
+- Check `/var/log/cloud-init-output.log` on EC2 instances for bootstrap errors
+
+### Cannot Access Resources After Connecting to VPN
+
+**Symptoms:** VPN connects successfully but cannot ping/access private resources
+
+**Common causes:**
+1. **Routes not configured** - VPN client doesn't know which traffic to route through tunnel
+   ```hcl
+   # Add routes in your Terraform configuration
+   module "vpn" {
+     routes = [
+       {
+         network = "10.0.0.0"
+         netmask = "255.0.0.0"
+       }
+     ]
+   }
+   ```
+
+2. **EC2 source/destination check enabled** - Prevents routing through OpenVPN instances
+   - This is automatically disabled by the module
+   - Verify: `aws ec2 describe-instance-attribute --instance-id <id> --attribute sourceDestCheck`
+
+3. **Route table missing routes** - VPC route tables don't route traffic back through VPN
+   - Add routes in your private subnet route tables pointing to OpenVPN instance ENIs
+   - Or use VPC subnet routing (recommended for production)
+
+4. **Security groups blocking traffic** - Destination resources may block VPN subnet (172.16.0.0/24)
+   - Add security group rules to allow traffic from 172.16.0.0/24
+
+**Resolution:**
+- Configure `routes` variable to include your VPC CIDR
+- Verify security groups on destination resources allow traffic from VPN subnet
+- Check VPC route tables include routes back to VPN subnet
+
+### High CPU Utilization on OpenVPN Instances
+
+**Symptoms:** CloudWatch alarm triggers for high CPU, or autoscaling adds many instances
+
+**Common causes:**
+1. **Instance type too small** - Encryption is CPU-intensive
+   - Check current instance type: `aws ec2 describe-instances --filters "Name=tag:Name,Values=openvpn"`
+   - Consider upgrading from c6in.large to c6in.xlarge
+
+2. **Many concurrent connections** - Each connection consumes CPU for encryption
+   - Check active connections: `ssh ec2-user@<instance-ip> "cat /var/log/openvpn/status.log"`
+   - Expected: ~10-15% CPU per 10 concurrent users on c6in.large
+
+3. **Autoscaling threshold too low** - `autoscaling_target_cpu` may be too aggressive
+   ```hcl
+   # Increase target CPU percentage
+   autoscaling_target_cpu = 75  # Default is 60
+   ```
+
+**Resolution:**
+- Use larger instance type (var.instance_type = "c6in.xlarge")
+- Adjust autoscaling threshold if instances scale too aggressively
+- Monitor average CPU across ASG, not just peak instances
+
+### EFS Mount Failures
+
+**Symptoms:** EC2 instances fail to mount EFS, bootstrap fails
+
+**Common causes:**
+1. **Security group misconfiguration** - EFS security group doesn't allow NFS from ASG
+   - Check EFS security group allows port 2049 from ASG security group
+
+2. **EFS availability** - EFS mount targets not in all required AZs
+   ```shell
+   # List EFS mount targets
+   aws efs describe-mount-targets --file-system-id <efs-id> --region us-west-1
+   ```
+
+3. **Network connectivity** - Instances in wrong subnets or no route to EFS
+   - Verify instances are in `backend_subnet_ids`
+   - Ensure subnets have route to EFS (same VPC)
+
+**Resolution:**
+- Verify EFS security group ingress rules
+- Ensure EFS mount targets exist in all backend subnet AZs
+- Check `/var/log/cloud-init-output.log` for specific mount errors
+
+### Google OAuth Login Fails
+
+**Symptoms:** Clicking "Sign in with Google" shows error or "redirect URI mismatch"
+
+**Common causes:**
+1. **Redirect URI mismatch** - Google OAuth app not configured with correct callback URL
+   - Authorized redirect URI must be: `https://openvpn-portal.yourcompany.com/login/google/authorized`
+   - Check in Google Cloud Console > APIs & Services > Credentials
+
+2. **Multi-domain support not enabled** - Google OAuth app is "Internal" but users from external domains
+   - If `allowed_domains` includes domains other than your primary, publish app as "External"
+   - See Installation Step 4.4
+
+3. **Domain not verified** - Users from unverified domains cannot authenticate
+   - Verify all domains in `allowed_domains` are added in Google Workspace admin
+
+**Resolution:**
+- Update Google OAuth authorized redirect URIs to match your portal URL
+- Publish app as "External" if supporting multiple domains
+- Verify domain ownership in Google Workspace
+
+### Instance Refresh Stuck or Failing
+
+**Symptoms:** Terraform apply triggers instance refresh that never completes
+
+**Common causes:**
+1. **Health check grace period too short** - Instances terminated before fully bootstrapped
+   ```hcl
+   # Increase grace period if bootstrap takes longer
+   asg_health_check_grace_period = 900  # 15 minutes (default is 600)
+   ```
+
+2. **New instances failing health checks** - Check why new instances are unhealthy
+   - View bootstrap logs in CloudWatch
+   - Check NLB target health status
+
+3. **Insufficient capacity** - ASG cannot launch new instances before terminating old ones
+   - Verify `asg_max_size` >= `asg_min_size * 2` to allow rolling updates
+
+**Resolution:**
+- Increase `asg_health_check_grace_period` if instances need more bootstrap time
+- Check CloudWatch Logs for bootstrap failures on new instances
+- Ensure `asg_max_size` allows for rolling updates (at least 2x min_size)
+
+## Security Best Practices
+
+### Network Security
+
+1. **Restrict SSH Access**
+   - Limit SSH security group rules to specific IP ranges (not 0.0.0.0/0)
+   - Consider using AWS Systems Manager Session Manager instead of SSH
+   - Rotate SSH keys regularly
+
+2. **Enable VPC Flow Logs**
+   - Capture network traffic metadata for security monitoring
+   - Send to CloudWatch Logs for querying
+   - Also export to S3 for long-term retention
+
+3. **Use Private Subnets for Backend**
+   - Deploy OpenVPN instances in private subnets (`backend_subnet_ids`)
+   - Use NAT Gateway for outbound internet access
+   - Only NLB should be in public subnets (`lb_subnet_ids`)
+
+4. **Enable AWS GuardDuty**
+   - Monitors for malicious activity and unauthorized behavior
+   - Detects compromised instances
+   - Analyzes VPC Flow Logs and CloudTrail events
+
+### Access Control
+
+1. **Implement Least Privilege IAM**
+   - Limit `google_oauth_client_writer` role to specific users/groups
+   - Use AWS SSO instead of IAM users for human access
+   - Regularly review IAM policies attached to instance profiles
+
+2. **Enable MFA for Google OAuth**
+   - Enforce MFA in Google Workspace for all VPN users
+   - Set up security policies requiring MFA for external access
+
+3. **Limit Allowed Domains**
+   - Only add trusted domains to `allowed_domains`
+   - Review the list quarterly
+   - Remove domains when partnerships end
+
+4. **Use Short-Lived Credentials**
+   - Set up certificate rotation via EFS lifecycle
+   - Configure OpenVPN to expire idle sessions
+   - Consider implementing certificate revocation lists (CRL)
+
+### Data Protection
+
+1. **Enable EFS Backup**
+   ```hcl
+   enable_efs_backup = true
+   efs_backup_retention_days = 365
+   ```
+
+2. **Use CMK for EFS Encryption** (Optional)
+   - EFS already uses AWS-managed encryption by default
+   - For stricter compliance, use customer-managed KMS key
+   - Enables key rotation and access logging
+
+3. **Encrypt CloudWatch Logs** (Optional)
+   - Logs use AWS-managed encryption by default
+   - For stricter compliance, configure log group KMS encryption
+
+4. **Secure Secrets Management**
+   - Never commit Google OAuth credentials to Git
+   - Use AWS Secrets Manager for all sensitive data
+   - Enable secret rotation where possible
+
+### Monitoring and Auditing
+
+1. **Enable CloudTrail**
+   - Log all AWS API calls
+   - Monitor for unauthorized infrastructure changes
+   - Set up alerts for security group modifications
+
+2. **Configure CloudWatch Alarms**
+   - High CPU utilization (already configured)
+   - Authentication failures
+   - Unusual connection patterns
+   - EFS mount failures
+
+3. **Regular Security Audits**
+   - Review CloudWatch Logs for failed login attempts
+   - Monitor active VPN sessions
+   - Check for security group changes
+   - Review IAM access patterns
+
+4. **Incident Response Plan**
+   - Document procedure for revoking user access
+   - Plan for rotating Google OAuth credentials
+   - Test EFS restore process
+   - Maintain runbook for common security events
+
+### Compliance Considerations
+
+1. **ISO 27001 / SOC 2**
+   - Enable all logging (VPC Flow Logs, CloudWatch, CloudTrail)
+   - Set log retention to 365 days minimum
+   - Implement regular access reviews
+   - Document security controls
+
+2. **HIPAA / PCI DSS**
+   - Use customer-managed KMS keys for encryption
+   - Enable detailed audit logging
+   - Implement network segmentation
+   - Regular vulnerability scanning
+
+3. **GDPR**
+   - Document data flows through VPN
+   - Implement user access controls
+   - Enable log anonymization if needed
+   - Data retention policies for logs
+
+## Cost Optimization
+
+### Compute Costs
+
+1. **Right-size Instance Types**
+   - Monitor CPU and network utilization in CloudWatch
+   - If average CPU < 30%, consider smaller instance type
+   - If network consistently high, upgrade to network-optimized instance
+
+   ```hcl
+   # Current cost: c6in.large ~$82/month
+   # Downgrade option: t3a.small ~$15/month (dev/test only)
+   # Upgrade option: c6in.xlarge ~$164/month (high load)
+   instance_type = "c6in.large"
+   ```
+
+2. **Use Spot Instances for Non-Production**
+   - Save up to 70% on compute costs
+   - Suitable for dev/test environments
+   - Maintain minimum on-demand capacity for stability
+
+   ```hcl
+   # Request spot instances with 2 on-demand base
+   on_demand_base_capacity = 2
+   asg_min_size = 2
+   asg_max_size = 6
+   ```
+
+3. **Optimize Auto Scaling Thresholds**
+   - Increase target CPU to reduce over-provisioning
+   - Adjust network threshold based on actual usage patterns
+
+   ```hcl
+   autoscaling_target_cpu = 70  # Default: 60
+   autoscaling_target_network_percentage = 70  # Default: 60
+   ```
+
+4. **Schedule Scale-Down for Off-Hours**
+   - For environments with predictable usage (e.g., office hours only)
+   - Use AWS Auto Scaling scheduled actions
+   - Reduce `asg_min_size` during nights/weekends
+
+### Storage Costs
+
+1. **Optimize EFS Lifecycle Policies**
+   - EFS Standard costs $0.30/GB-month
+   - EFS Infrequent Access costs $0.025/GB-month (90% savings)
+   - Set up lifecycle policy to move old certificates to IA storage
+
+   ```shell
+   # Add lifecycle policy to move files >30 days old to IA
+   aws efs put-lifecycle-configuration --file-system-id <fs-id> \
+     --lifecycle-policies TransitionToIA=AFTER_30_DAYS
+   ```
+
+2. **Optimize CloudWatch Logs Retention**
+   - 365 days retention: ~$0.50/GB ingestion + $0.03/GB storage
+   - Consider 90 days for non-compliance environments
+
+   ```hcl
+   cloudwatch_log_retention_days = 90  # Default: 365
+   ```
+
+3. **Optimize EFS Backups**
+   - AWS Backup costs $0.05/GB-month (warm storage)
+   - Consider shorter retention for non-critical environments
+
+   ```hcl
+   efs_backup_retention_days = 30  # Default: 365 (compliance)
+   ```
+
+### Network Costs
+
+1. **Minimize Cross-AZ Traffic**
+   - Deploy NLB and ASG in same availability zones
+   - Cross-AZ data transfer costs $0.01/GB
+   - Use `lb_subnet_ids` and `backend_subnet_ids` in matching AZs
+
+2. **Optimize VPN Routes**
+   - Only push necessary routes through VPN tunnel
+   - Avoid routing internet traffic through VPN (unless required)
+   - Use split-tunnel configuration
+
+   ```hcl
+   # Only route private networks through VPN
+   routes = [
+     {
+       network = "10.0.0.0"
+       netmask = "255.0.0.0"
+     }
+   ]
+   # Internet traffic goes directly from client
+   ```
+
+3. **Use VPC Endpoints**
+   - Reduce NAT Gateway costs for AWS service access
+   - S3 and DynamoDB endpoints are free
+   - Interface endpoints cost $0.01/hour (~$7/month)
+
+### Portal Costs
+
+1. **Optimize ECS Task Count**
+   - Monitor portal usage patterns
+   - For small teams (<20 users), single task may suffice
+
+   ```hcl
+   portal_task_min_count = 1  # Default: number of backend subnets
+   portal_task_max_count = 2  # Default: min_count + 1
+   ```
+
+2. **Right-size Portal Instance Type**
+   - Monitor memory and CPU usage in ECS metrics
+   - Default t3.small is suitable for <50 users
+
+   ```hcl
+   portal_instance_type = "t3.small"  # ~$15/month
+   # Alternative: t3.nano for very small teams (~$4/month)
+   ```
+
+3. **Optimize Worker Count**
+   - Reduce workers if portal sees light usage
+   - Monitor response times to ensure adequate capacity
+
+   ```hcl
+   portal_workers_count = 2  # Default: 4
+   ```
+
+### Overall Cost Reduction Tips
+
+1. **Use AWS Cost Explorer**
+   - Tag all resources with environment/project tags
+   - Filter costs by tag to identify expensive resources
+   - Set up budget alerts
+
+2. **Dev/Test Environment Optimization**
+   - Use smaller instance types
+   - Enable spot instances
+   - Shorter log retention (30 days)
+   - Reduce backup retention (7 days)
+   - Scale down to 0 instances during off-hours
+
+3. **Production Cost Monitoring**
+   - Set up CloudWatch billing alarms
+   - Monthly cost review
+   - Identify unused resources (idle load balancers, unattached EBS volumes)
+
+**Example Cost Breakdown (us-east-1):**
+- OpenVPN instances (2x c6in.large): ~$164/month
+- NLB: ~$18/month (base) + $0.006/GB processed
+- EFS: ~$3/month (10 GB) + lifecycle savings
+- Portal (1x t3.small ECS task): ~$15/month
+- CloudWatch Logs: ~$5/month (moderate usage)
+- EFS Backups: ~$0.50/month (10 GB)
+- **Total: ~$205-215/month** (small deployment, 2 instances, <100 users)
+
+## Monitoring & Alerts
+
+### CloudWatch Metrics
+
+The module automatically publishes metrics to CloudWatch for monitoring VPN infrastructure health.
+
+#### Auto Scaling Group Metrics
+
+1. **CPU Utilization** (AWS/EC2 namespace)
+   - Metric: `CPUUtilization`
+   - Dimensions: `AutoScalingGroupName=openvpn-<random>`
+   - Alarm configured: Triggers when CPU > 80% for 5 minutes
+   - Use case: Identifies when instances are overloaded
+
+2. **Network In/Out** (AWS/EC2 namespace)
+   - Metrics: `NetworkIn`, `NetworkOut`
+   - Used for network-based autoscaling
+   - Target: 60% of instance baseline bandwidth
+   - Use case: Scales ASG based on VPN traffic volume
+
+3. **GroupDesiredCapacity** (AWS/AutoScaling namespace)
+   - Current target capacity set by autoscaling policies
+   - Use case: Monitor scaling events
+
+4. **GroupInServiceInstances** (AWS/AutoScaling namespace)
+   - Number of healthy instances currently serving traffic
+   - Use case: Detect capacity issues
+
+#### Network Load Balancer Metrics
+
+1. **HealthyHostCount** (AWS/NetworkELB namespace)
+   - Number of targets passing health checks
+   - **Recommended alarm:** Alert when < min_size
+   - Use case: Detect instance failures
+
+2. **UnHealthyHostCount** (AWS/NetworkELB namespace)
+   - Number of targets failing health checks
+   - **Recommended alarm:** Alert when > 0
+   - Use case: Early warning of instance problems
+
+3. **ActiveFlowCount** (AWS/NetworkELB namespace)
+   - Number of concurrent VPN connections
+   - Use case: Monitor user load
+
+4. **ProcessedBytes** (AWS/NetworkELB namespace)
+   - Total bytes processed by NLB
+   - Use case: Track bandwidth usage for cost optimization
+
+#### ECS Portal Metrics
+
+1. **CPUUtilization** (AWS/ECS namespace)
+   - Portal service CPU usage
+   - Dimensions: `ServiceName=openvpn-portal`, `ClusterName=openvpn-portal`
+   - Use case: Monitor portal performance
+
+2. **MemoryUtilization** (AWS/ECS namespace)
+   - Portal service memory usage
+   - **Recommended alarm:** Alert when > 85%
+   - Use case: Detect memory leaks or need for more workers
+
+3. **RunningTaskCount** (AWS/ECS namespace)
+   - Number of healthy portal tasks
+   - **Recommended alarm:** Alert when < portal_task_min_count
+   - Use case: Detect portal availability issues
+
+### Setting Up Additional Alarms
+
+#### High Unhealthy Target Count
+```hcl
+resource "aws_cloudwatch_metric_alarm" "nlb_unhealthy_targets" {
+  alarm_name          = "openvpn-unhealthy-targets"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "UnHealthyHostCount"
+  namespace           = "AWS/NetworkELB"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 0
+  alarm_description   = "Alert when NLB has unhealthy targets"
+
+  dimensions = {
+    LoadBalancer = "<load-balancer-arn-suffix>"
+  }
+
+  alarm_actions = [var.sns_topic_alarm_arn]
+}
+```
+
+#### Low Healthy Target Count
+```hcl
+resource "aws_cloudwatch_metric_alarm" "nlb_low_healthy_targets" {
+  alarm_name          = "openvpn-low-healthy-targets"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/NetworkELB"
+  period              = 60
+  statistic           = "Average"
+  threshold           = var.asg_min_size
+  alarm_description   = "Alert when healthy targets below minimum"
+
+  dimensions = {
+    LoadBalancer = "<load-balancer-arn-suffix>"
+  }
+
+  alarm_actions = [var.sns_topic_alarm_arn]
+}
+```
+
+#### Portal Memory High
+```hcl
+resource "aws_cloudwatch_metric_alarm" "portal_memory_high" {
+  alarm_name          = "openvpn-portal-memory-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "MemoryUtilization"
+  namespace           = "AWS/ECS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 85
+  alarm_description   = "Alert when portal memory usage high"
+
+  dimensions = {
+    ServiceName = "openvpn-portal"
+    ClusterName = "openvpn-portal"
+  }
+
+  alarm_actions = [var.sns_topic_alarm_arn]
+}
+```
+
+### CloudWatch Dashboards
+
+Create a custom dashboard to monitor VPN health:
+
+```shell
+aws cloudwatch put-dashboard --dashboard-name OpenVPN-Monitoring \
+  --dashboard-body file://openvpn-dashboard.json
+```
+
+**Example dashboard (openvpn-dashboard.json):**
+```json
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [ "AWS/NetworkELB", "HealthyHostCount", { "stat": "Average" } ],
+          [ ".", "UnHealthyHostCount", { "stat": "Average" } ]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "us-west-1",
+        "title": "NLB Target Health",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [ "AWS/EC2", "CPUUtilization", { "stat": "Average" } ]
+        ],
+        "period": 300,
+        "stat": "Average",
+        "region": "us-west-1",
+        "title": "OpenVPN Instance CPU"
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [ "AWS/NetworkELB", "ActiveFlowCount", { "stat": "Sum" } ]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "us-west-1",
+        "title": "Active VPN Connections"
+      }
+    }
+  ]
+}
+```
+
+### Log-based Metrics
+
+Create CloudWatch Logs metric filters to track application-level events:
+
+#### Authentication Failures
+```shell
+aws logs put-metric-filter \
+  --log-group-name /aws/openvpn/development/openvpn \
+  --filter-name AuthenticationFailures \
+  --filter-pattern "[... , status=FAILED]" \
+  --metric-transformations \
+    metricName=AuthFailureCount,metricNamespace=OpenVPN,metricValue=1
+```
+
+#### New Connections
+```shell
+aws logs put-metric-filter \
+  --log-group-name /aws/openvpn/development/openvpn \
+  --filter-name NewConnections \
+  --filter-pattern "[... , event=CONNECTED]" \
+  --metric-transformations \
+    metricName=NewConnectionCount,metricNamespace=OpenVPN,metricValue=1
+```
+
+### Recommended Alert Configuration
+
+For production deployments, configure these SNS notifications:
+
+```hcl
+module "vpn" {
+  source = "registry.infrahouse.com/infrahouse/openvpn/aws"
+
+  # SNS topic for instance-level alarms (high CPU, etc.)
+  sns_topic_alarm_arn = aws_sns_topic.openvpn_alerts.arn
+
+  # Email addresses for portal alarms (ECS task failures, etc.)
+  alarm_emails = [
+    "devops-oncall@yourcompany.com",
+    "vpn-admins@yourcompany.com"
+  ]
+}
+
+resource "aws_sns_topic" "openvpn_alerts" {
+  name = "openvpn-infrastructure-alerts"
+}
+
+resource "aws_sns_topic_subscription" "openvpn_alerts_email" {
+  topic_arn = aws_sns_topic.openvpn_alerts.arn
+  protocol  = "email"
+  endpoint  = "devops-oncall@yourcompany.com"
+}
+```
+
+### Monitoring Checklist
+
+- [ ] High CPU alarm configured (✅ enabled by default)
+- [ ] NLB unhealthy targets alarm configured
+- [ ] NLB healthy targets < min alarm configured
+- [ ] Portal memory utilization alarm configured
+- [ ] Portal running tasks < min alarm configured
+- [ ] CloudWatch dashboard created
+- [ ] SNS topic configured with email subscriptions
+- [ ] Log-based metrics created for auth failures
+- [ ] VPC Flow Logs enabled (external to module)
+- [ ] Weekly review of CloudWatch Logs Insights queries
+
+## Testing Locally
+
+This section describes how to test module changes in a development environment before deploying to production.
+
+### Prerequisites
+
+- Terraform >= 1.5
+- Python 3.12+ (for pytest-based tests)
+- AWS CLI configured with credentials
+- GNU Make
+- Pre-commit (optional, for local linting)
+
+### Setting Up Development Environment
+
+1. **Clone the repository**
+   ```shell
+   git clone https://github.com/infrahouse/terraform-aws-openvpn.git
+   cd terraform-aws-openvpn
+   ```
+
+2. **Install Python dependencies**
+   ```shell
+   make bootstrap
+   ```
+
+   This installs:
+   - `checkov` - Security scanning
+   - `infrahouse-core` - InfraHouse toolkit utilities
+   - `pytest-infrahouse` - Test fixtures and helpers
+
+3. **Install pre-commit hooks**
+   ```shell
+   pre-commit install
+   ```
+
+   Hooks run automatically on `git commit`:
+   - `terraform fmt` - Format Terraform files
+   - `terraform-docs` - Update README.md documentation
+   - `checkov` - Security scanning
+   - Python linting (if applicable)
+
+### Running Tests
+
+The module includes comprehensive pytest-based integration tests.
+
+#### Quick Test Run
+```shell
+# Run all tests
+make test
+
+# Run specific test file
+pytest tests/test_openvpn.py -v
+
+# Run specific test case
+pytest tests/test_openvpn.py::test_module -v
+```
+
+#### Test Environment Variables
+
+Tests require AWS credentials and optionally Google OAuth credentials:
+
+```shell
+# Required: AWS credentials (via AWS CLI profile or environment variables)
+export AWS_DEFAULT_PROFILE=AWSAdministratorAccess-123456789012
+export AWS_DEFAULT_REGION=us-west-1
+
+# Optional: Google OAuth client secret for full integration test
+export OPENVPN_CLIENT_SECRET='{"web": {"client_id": "...", "client_secret": "..."}}'
+
+# Run tests
+make test
+```
+
+#### What Tests Cover
+
+1. **Infrastructure Creation** (`test_module`)
+   - Creates full VPN infrastructure in AWS
+   - Verifies all resources are created correctly
+   - Checks Auto Scaling Group, NLB, EFS, ECS portal
+   - Validates security groups and IAM roles
+
+2. **Connectivity** (`test_vpn_connectivity`)
+   - Deploys test EC2 instance in private subnet
+   - Verifies VPN client can connect
+   - Tests network connectivity to private resources
+
+3. **Security** (via Checkov)
+   - Scans for misconfigurations
+   - Validates encryption settings
+   - Checks for overly permissive security groups
+
+#### Test Data Location
+
+Test fixtures are in `test_data/`:
+- `test_data/openvpn/` - Main test configuration
+- `test_data/openvpn/ecr.tf` - Test ECR repository (for custom portal images)
+- `test_data/openvpn/main.tf` - Test module invocation
+
+### Manual Testing Workflow
+
+For testing changes before committing:
+
+1. **Create a test branch**
+   ```shell
+   git checkout -b feature/my-improvement
+   ```
+
+2. **Make your changes**
+   - Edit Terraform files
+   - Update variable descriptions
+   - Modify security group rules
+
+3. **Run linters locally**
+   ```shell
+   make lint
+   ```
+
+   This runs:
+   - `terraform fmt -check` - Verify formatting
+   - `terraform validate` - Validate syntax
+   - Additional InfraHouse linters
+
+4. **Run Checkov security scan**
+   ```shell
+   checkov -d . --config-file .checkov.yml
+   ```
+
+5. **Update documentation**
+   ```shell
+   terraform-docs markdown table --output-file README.md --output-mode inject .
+   ```
+
+6. **Run integration tests**
+   ```shell
+   make test-keep
+   make test-clean ## final run at the end
+   ```
+
+7. **Commit changes**
+   ```shell
+   git add .
+   git commit -m "Add feature X"
+   # Pre-commit hooks run automatically
+   ```
+
+### Testing in Isolated AWS Account
+
+For safer testing, use a dedicated AWS account:
+
+1. **Create test AWS account** (via AWS Organizations)
+
+2. **Configure test environment**
+   ```hcl
+   # test_data/openvpn/main.tf
+   module "vpn" {
+     source = "../.."  # Local module path
+
+     backend_subnet_ids = ["subnet-test1", "subnet-test2"]
+     lb_subnet_ids      = ["subnet-public1", "subnet-public2"]
+     zone_id            = "Z1234567890ABC"  # Test Route53 zone
+
+     google_oauth_client_writer = "arn:aws:iam::123456789012:role/test-admin"
+
+     # Use smaller instances for cost savings
+     instance_type = "t3a.small"
+     portal_instance_type = "t3.nano"
+
+     # Shorter retention for test
+     cloudwatch_log_retention_days = 7
+     efs_backup_retention_days = 7
+   }
+   ```
+
+3. **Apply test configuration**
+   ```shell
+   cd test_data/openvpn
+   terraform init
+   terraform apply
+   ```
+
+4. **Test functionality**
+   - Download VPN profile from portal
+   - Connect with OpenVPN client
+   - Verify connectivity to test resources
+
+5. **Destroy test resources**
+   ```shell
+   terraform destroy
+   ```
+
+### Debugging Failed Tests
+
+#### View Terraform Output
+```shell
+# Enable Terraform debug logging
+export TF_LOG=DEBUG
+make test
+```
+
+#### Check CloudWatch Logs
+```shell
+# View bootstrap logs
+aws logs tail /aws/openvpn/development/openvpn --follow
+
+# View portal logs
+aws logs tail /aws/ecs/openvpn-portal --follow
+```
+
+#### SSH to Test Instance
+```shell
+# Get instance IP from Terraform output
+terraform output instance_private_ip
+
+# SSH via Systems Manager (no key required)
+aws ssm start-session --target i-1234567890abcdef0
+
+# Or traditional SSH if key pair configured
+ssh -i ~/.ssh/test-key.pem ubuntu@<instance-ip>
+```
+
+#### Common Test Failures
+
+1. **Test timeout** - Increase `asg_health_check_grace_period`
+2. **EFS mount failure** - Check security group rules
+3. **Google OAuth errors** - Verify `OPENVPN_CLIENT_SECRET` environment variable
+4. **Terraform state lock** - Clean up DynamoDB lock table
+
+### CI/CD Pipeline Testing
+
+The module uses GitHub Actions for automated testing:
+
+- **Workflow:** `.github/workflows/terraform-CI.yml`
+- **Runs on:** Pull requests to `main` branch
+- **Steps:**
+  1. Checkout code
+  2. Configure AWS credentials (via OIDC)
+  3. Set up Python environment
+  4. Run linters (`make lint`)
+  5. Run Checkov security scan
+  6. Run integration tests (`make test`)
+
+**View workflow runs:**
+https://github.com/infrahouse/terraform-aws-openvpn/actions
+
+### Best Practices for Testing
+
+1. **Always test in isolated environment first**
+   - Never test directly in production AWS account
+   - Use dedicated test account or separate VPC
+
+2. **Clean up test resources**
+   - Run `terraform destroy` after testing
+   - Check for orphaned resources (load balancers, security groups)
+
+3. **Test both success and failure paths**
+   - Verify module handles errors gracefully
+   - Test with invalid inputs
+   - Test resource limits (max instances, etc.)
+
+4. **Document test scenarios**
+   - Add comments to test files
+   - Document expected behavior
+   - Include reproduction steps for bugs
+
+5. **Use version pinning for testing**
+   - Pin provider versions in test configuration
+   - Ensures reproducible test results
+
 <!-- BEGIN_TF_DOCS -->
 
 ## Requirements
@@ -581,6 +1558,7 @@ For **ISO 27001** or other compliance frameworks:
 | <a name="input_allowed_domains"></a> [allowed\_domains](#input\_allowed\_domains) | List of Google Workspace domains whose users are allowed to connect to the VPN.<br/><br/>The OpenVPN portal uses Google OAuth for authentication. Only users with email<br/>addresses from the specified domains can authenticate and download VPN profiles.<br/><br/>Important notes:<br/>- The domain from zone\_id is AUTOMATICALLY added to this list<br/>- For multi-domain support, your Google OAuth app must be "external" type<br/>- Each domain must be verified in your Google Cloud Console<br/>- Users must have active Google Workspace accounts<br/><br/>Example:<br/>allowed\_domains = [<br/>  "company.com",<br/>  "subsidiary.com"<br/>]<br/><br/>If zone\_id points to example.com, the effective list will be:<br/>["example.com", "company.com", "subsidiary.com"]<br/><br/>Default: [] (only the zone domain is allowed) | `list(string)` | `[]` | no |
 | <a name="input_asg_ami"></a> [asg\_ami](#input\_asg\_ami) | Image for EC2 instances | `string` | `null` | no |
 | <a name="input_asg_health_check_grace_period"></a> [asg\_health\_check\_grace\_period](#input\_asg\_health\_check\_grace\_period) | Auto Scaling Group health check grace period in seconds.<br/><br/>This is the time AWS waits after instance launch before checking health status.<br/>During this period, instances won't be terminated even if they fail health checks.<br/><br/>Why 600 seconds (10 minutes)?<br/>The OpenVPN server bootstrap process includes:<br/>1. Cloud-init package installation (~2-3 minutes)<br/>2. Puppet run to configure OpenVPN (~3-4 minutes)<br/>3. OpenVPN service startup (~30 seconds)<br/>4. EFS mount and certificate generation (~1-2 minutes)<br/>5. Network Load Balancer health check stabilization (~1 minute)<br/><br/>Typical bootstrap time: 7-8 minutes<br/>Grace period provides 2-3 minute buffer for slower instances or high network latency.<br/><br/>When to increase this value:<br/>- Custom packages in var.packages that take long to install<br/>- Complex Puppet manifests (var.puppet\_manifest)<br/>- Large EFS volumes with many existing certificates<br/>- Regions with slower package mirror speeds<br/><br/>When to decrease this value:<br/>- Using pre-baked AMIs (var.asg\_ami) with packages pre-installed<br/>- Minimal Puppet configuration<br/>- Fast bootstrap observed in testing<br/><br/>Default: 600 seconds (10 minutes) | `number` | `600` | no |
+| <a name="input_asg_instance_refresh_max_healthy_percentage"></a> [asg\_instance\_refresh\_max\_healthy\_percentage](#input\_asg\_instance\_refresh\_max\_healthy\_percentage) | Maximum percentage of healthy instances during ASG instance refresh rolling updates.<br/><br/>Controls how many extra instances can be launched during instance refresh:<br/>- 100 = No extra instances (replace one-by-one)<br/>- 110 = Allow 10% extra instances (DEFAULT - enables faster updates)<br/>- 200 = Allow double capacity during refresh<br/><br/>Higher values enable faster updates but temporarily increase costs.<br/>Lower values reduce costs but slow down deployments.<br/><br/>Example with asg\_min\_size=2, asg\_max\_size=4:<br/>- 100%: Replace 1 at a time (max 2 instances total)<br/>- 110%: Can temporarily have 2.2 instances (rounds up to 3)<br/>- 200%: Can temporarily have 4 instances during refresh<br/><br/>Default: 110 (recommended balance of speed and cost) | `number` | `110` | no |
 | <a name="input_asg_max_size"></a> [asg\_max\_size](#input\_asg\_max\_size) | Maximum number of instances in ASG | `number` | `null` | no |
 | <a name="input_asg_min_size"></a> [asg\_min\_size](#input\_asg\_min\_size) | Minimum number of instances in ASG | `number` | `null` | no |
 | <a name="input_autoscaling_target_cpu"></a> [autoscaling\_target\_cpu](#input\_autoscaling\_target\_cpu) | Target CPU utilization percentage for autoscaling. Applied to both OpenVPN ASG and Portal ECS service. | `number` | `60` | no |
@@ -628,8 +1606,20 @@ For **ISO 27001** or other compliance frameworks:
 | Name | Description |
 |------|-------------|
 | <a name="output_autoscaling_group_name"></a> [autoscaling\_group\_name](#output\_autoscaling\_group\_name) | Name of the autoscaling group managing the OpenVPN instances |
+| <a name="output_efs_dns_name"></a> [efs\_dns\_name](#output\_efs\_dns\_name) | DNS name of the EFS file system mount target for accessing shared OpenVPN configuration |
+| <a name="output_efs_file_system_id"></a> [efs\_file\_system\_id](#output\_efs\_file\_system\_id) | ID of the EFS file system used for storing OpenVPN configuration and certificates |
+| <a name="output_efs_security_group_id"></a> [efs\_security\_group\_id](#output\_efs\_security\_group\_id) | ID of the security group attached to the EFS file system for OpenVPN configuration storage |
 | <a name="output_google_client_secret"></a> [google\_client\_secret](#output\_google\_client\_secret) | Google OAuth client secret name. The OpenVPN portal admin must update the secret with a Google OAuth client JSON. |
+| <a name="output_launch_template_id"></a> [launch\_template\_id](#output\_launch\_template\_id) | ID of the EC2 launch template used by the OpenVPN Auto Scaling Group |
+| <a name="output_launch_template_latest_version"></a> [launch\_template\_latest\_version](#output\_launch\_template\_latest\_version) | Latest version number of the OpenVPN launch template |
 | <a name="output_load_balancer_arn"></a> [load\_balancer\_arn](#output\_load\_balancer\_arn) | ARN of the load balancer for the OpenVPN portal |
+| <a name="output_nlb_arn"></a> [nlb\_arn](#output\_nlb\_arn) | ARN of the Network Load Balancer |
+| <a name="output_nlb_dns_name"></a> [nlb\_dns\_name](#output\_nlb\_dns\_name) | DNS name of the Network Load Balancer serving OpenVPN traffic |
+| <a name="output_nlb_security_group_id"></a> [nlb\_security\_group\_id](#output\_nlb\_security\_group\_id) | ID of the security group attached to the Network Load Balancer |
 | <a name="output_openvpn-instance-role-arn"></a> [openvpn-instance-role-arn](#output\_openvpn-instance-role-arn) | ARN of the IAM role attached to the OpenVPN instance |
+| <a name="output_openvpn_port"></a> [openvpn\_port](#output\_openvpn\_port) | TCP port number used by OpenVPN server for client connections |
 | <a name="output_portal_url"></a> [portal\_url](#output\_portal\_url) | URL of the OpenVPN portal web interface |
+| <a name="output_security_group_id"></a> [security\_group\_id](#output\_security\_group\_id) | ID of the security group attached to OpenVPN Auto Scaling Group instances |
+| <a name="output_target_group_arn"></a> [target\_group\_arn](#output\_target\_group\_arn) | ARN of the Network Load Balancer target group for OpenVPN instances |
+| <a name="output_vpn_server_fqdn"></a> [vpn\_server\_fqdn](#output\_vpn\_server\_fqdn) | Fully qualified domain name (FQDN) of the OpenVPN server endpoint for client connections |
 <!-- END_TF_DOCS -->
