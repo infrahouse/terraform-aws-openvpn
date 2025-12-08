@@ -48,13 +48,6 @@ data "aws_vpc" "selected" {
   id = data.aws_subnet.selected.vpc_id
 }
 
-data "aws_internet_gateway" "current" {
-  filter {
-    name   = "attachment.vpc-id"
-    values = [data.aws_vpc.selected.id]
-  }
-}
-
 data "aws_ami" "selected" {
   filter {
     name = "image-id"
