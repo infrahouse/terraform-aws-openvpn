@@ -21,7 +21,6 @@ module "openvpn" {
   google_oauth_client_writer   = tolist(data.aws_iam_roles.sso-admin.arns)[0]
   alb_access_log_force_destroy = true
   portal_workers_count         = 1
-  portal_instance_type         = "t3a.nano"
   key_pair_name                = aws_key_pair.black-mbp.key_name
   allowed_domains = [
     "infrahouse.com",

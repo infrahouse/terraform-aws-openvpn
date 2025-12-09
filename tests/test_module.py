@@ -44,6 +44,35 @@ def verify_cloudwatch_logging(asg, boto3_session, aws_region):
     instance = instances[0]
     LOG.info("Testing CloudWatch logging on instance: %s", instance.instance_id)
 
+    # 0. Wait for Puppet to complete (marked by /var/run/puppet-done)
+    LOG.info("0. Waiting for Puppet to complete bootstrap (up to 10 minutes)...")
+    max_wait = 600  # 10 minutes
+    poll_interval = 10
+    puppet_done = False
+
+    for attempt in range(max_wait // poll_interval):
+        exit_code, stdout, stderr = instance.execute_command(
+            "test -f /var/run/puppet-done && echo 'done' || echo 'not done'"
+        )
+
+        if exit_code == 0 and stdout.strip() == "done":
+            puppet_done = True
+            LOG.info(
+                f"✓ Puppet bootstrap completed (after {(attempt + 1) * poll_interval} seconds)"
+            )
+            break
+
+        LOG.info(
+            f"   Puppet still running (attempt {attempt + 1}/{max_wait // poll_interval})..."
+        )
+        time.sleep(poll_interval)
+
+    assert puppet_done, (
+        f"Puppet bootstrap did not complete after {max_wait} seconds. "
+        f"Marker file /var/run/puppet-done not found. "
+        f"Instance may still be bootstrapping or bootstrap failed."
+    )
+
     # 1. Verify CloudWatch log group is in Puppet facts
     LOG.info("1. Checking Puppet facts for CloudWatch log group...")
     exit_code, stdout, stderr = instance.execute_command(
@@ -63,7 +92,10 @@ def verify_cloudwatch_logging(asg, boto3_session, aws_region):
     exit_code, stdout, stderr = instance.execute_command(
         "systemctl is-active amazon-cloudwatch-agent"
     )
-    assert exit_code == 0, f"CloudWatch agent service not running. stderr: {stderr}"
+    assert exit_code == 0 and stdout.strip() == "active", (
+        f"CloudWatch agent service not running after Puppet bootstrap completed. "
+        f"Status: {stdout.strip()}. stderr: {stderr}"
+    )
     LOG.info("✓ CloudWatch agent service is active")
 
     # 3. Verify CloudWatch Log Group exists in AWS

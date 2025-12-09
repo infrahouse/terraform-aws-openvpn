@@ -333,9 +333,41 @@ variable "packages" {
 }
 
 variable "portal_instance_type" {
-  description = "AWS instance type for the portal service"
+  description = <<-EOT
+    AWS instance type for the OpenVPN portal ECS container instances.
+
+    **IMPORTANT:** Must have at least 1 GB of RAM to run the portal container (200 MB)
+    plus ECS agent, CloudWatch agent, and OS overhead.
+
+    Recommended types:
+    - t3.small / t3a.small (2 GB RAM) - DEFAULT, good for <50 users
+    - t3.micro / t3a.micro (1 GB RAM) - Minimum viable, tight fit
+    - t3.medium (4 GB RAM) - High availability setups
+
+    ⚠️  DO NOT USE: t3.nano, t3a.nano (0.5 GB RAM) - Insufficient memory for ECS task placement
+
+    The portal container requires 200 MB memory. After OS (~250 MB), ECS agent (~50 MB),
+    and CloudWatch agent (~50 MB), a 1 GB instance has ~650 MB available, which is sufficient.
+    Instances with 512 MB RAM (nano types) only have ~150 MB available after overhead.
+  EOT
   type        = string
-  default     = "t3.small"
+  default     = "t3a.small"
+
+  validation {
+    condition     = !can(regex("\\.(nano)$", var.portal_instance_type))
+    error_message = <<-EOT
+      The portal_instance_type '${var.portal_instance_type}' has insufficient memory (< 1 GB RAM).
+
+      Nano instance types (t2.nano, t3.nano, t3a.nano, t4g.nano) only have 512 MB RAM.
+      After OS, ECS agent, and CloudWatch agent overhead (~350 MB), only ~150 MB remains.
+      The portal container requires 200 MB, causing ECS task placement failures.
+
+      Minimum recommended: t3.micro or t3a.micro (1 GB RAM)
+      Default recommended: t3.small or t3a.small (2 GB RAM)
+
+      For cost optimization in dev/test, reduce container_memory to 128 MB instead of using nano instances.
+    EOT
+  }
 }
 
 variable "portal_workers_count" {

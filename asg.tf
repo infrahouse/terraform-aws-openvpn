@@ -21,6 +21,9 @@ module "userdata" {
       "nfs-common",
     ]
   )
+  post_runcmd = [
+    "touch /var/run/puppet-done"
+  ]
   extra_files = var.extra_files
   extra_repos = var.extra_repos
 
