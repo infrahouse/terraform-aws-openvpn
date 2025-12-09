@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.0] - 2025-12-09
+
+### Bug Fixes
+
+- Standardize module source references to use registry prefix
+- Rename test_cloudwatch_logging to verify_cloudwatch_logging
+- Add validation for portal instance type and improve test reliability
+
+### Documentation
+
+- Document IAM policy wildcard resource requirement
+- Improve variable descriptions with detailed HEREDOC format
+- Mark Phase 6.3 and 6.4 as skipped in implementation plan
+
+### Features
+
+- Upgrade ECS module to v7.0.0 with Amazon Linux 2023 support
+- Add comprehensive variable validation
+- Add CloudWatch logging for OpenVPN application logs
+- Add autoscaling policies and improve instance type defaults
+- Add EFS backup strategy and Name tags (Phase 7)
+- Refactor security groups and add Checkov security scanning
+- Enhance module with outputs, instance refresh optimization, and comprehensive documentation
+
+### Miscellaneous Tasks
+
+- Update dependency python ([#61](https://github.com/infrahouse/terraform-aws-openvpn/issues/61))
+- Improve development workflow and tooling
+
+### Testing
+
+- Add portal URL logging and output
+
 ## [unreleased]
 
 ### Miscellaneous Tasks
