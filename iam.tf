@@ -5,13 +5,15 @@ data "aws_iam_policy_document" "instance_permissions" {
     actions   = ["sts:GetCallerIdentity"]
     resources = ["*"]
   }
-  # The ec2:DescribeInstances action requires a wildcard resource ("*") because
-  # it is a read-only list operation that does not support resource-level permissions.
-  # Used by infrahouse-toolkit (ASGInstance class) to read instance tags and state.
+  # These EC2 describe actions require a wildcard resource ("*") because
+  # they are read-only list operations that do not support resource-level permissions.
+  # - ec2:DescribeInstances: Used by infrahouse-toolkit (ASGInstance class) to read instance tags and state
+  # - ec2:DescribeTags: Used by CloudWatch agent's ec2tagger to add instance tags to metrics
   # AWS API limitation - see: https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonec2.html
   statement {
     actions = [
       "ec2:DescribeInstances",
+      "ec2:DescribeTags",
     ]
     resources = [
       "*"
@@ -50,6 +52,19 @@ data "aws_iam_policy_document" "instance_permissions" {
     resources = [
       "${aws_cloudwatch_log_group.openvpn.arn}:*"
     ]
+  }
+  # CloudWatch Metrics permissions for publishing custom metrics
+  # PutMetricData doesn't support resource-level permissions, but we can limit by namespace
+  statement {
+    actions = [
+      "cloudwatch:PutMetricData"
+    ]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+      values   = [var.cloudwatch_namespace]
+    }
   }
 }
 

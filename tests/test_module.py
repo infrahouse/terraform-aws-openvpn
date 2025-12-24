@@ -138,7 +138,7 @@ def verify_cloudwatch_logging(asg, boto3_session, aws_region):
     import uuid
 
     test_message = f"TEST_LOG_MESSAGE_{uuid.uuid4().hex}"
-    log_stream_name = f"{instance.instance_id}/auth.log"
+    log_stream_name = f"{instance.instance_id}/auth/ssh"
 
     # Write test message to auth.log (which is configured to ship to CloudWatch)
     LOG.info("  Writing test message to /var/log/auth.log...")

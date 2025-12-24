@@ -640,6 +640,12 @@ variable "cloudwatch_log_retention_days" {
   }
 }
 
+variable "cloudwatch_namespace" {
+  description = "CloudWatch namespace for custom metrics published by the OpenVPN server"
+  type        = string
+  default     = "OpenVPN/System"
+}
+
 variable "autoscaling_target_cpu" {
   description = "Target CPU utilization percentage for autoscaling. Applied to both OpenVPN ASG and Portal ECS service."
   type        = number
