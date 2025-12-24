@@ -1471,10 +1471,10 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.25.0 |
-| <a name="provider_aws.dns"></a> [aws.dns](#provider\_aws.dns) | 6.25.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | 3.7.2 |
-| <a name="provider_tls"></a> [tls](#provider\_tls) | 4.1.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 5.11, < 7.0 |
+| <a name="provider_aws.dns"></a> [aws.dns](#provider\_aws.dns) | >= 5.11, < 7.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.6 |
+| <a name="provider_tls"></a> [tls](#provider\_tls) | ~> 4.0 |
 
 ## Modules
 
@@ -1566,6 +1566,7 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | <a name="input_backend_subnet_ids"></a> [backend\_subnet\_ids](#input\_backend\_subnet\_ids) | List of private subnet IDs where OpenVPN server instances and Portal ECS tasks will be deployed.<br/><br/>Requirements:<br/>- Minimum 2 subnets (AWS high availability best practice)<br/>- Must be in different availability zones<br/>- Should have outbound internet access (via NAT Gateway) for package installation<br/>- Used for both OpenVPN EC2 instances and Portal ECS tasks<br/><br/>The number of subnets determines default values for:<br/>- portal\_task\_min\_count (defaults to length of this list)<br/>- asg\_min\_size (defaults to length of this list)<br/><br/>Example: ["subnet-12345678", "subnet-87654321"]<br/><br/>Required. | `list(string)` | n/a | yes |
 | <a name="input_cloudinit_extra_commands"></a> [cloudinit\_extra\_commands](#input\_cloudinit\_extra\_commands) | Extra commands for run on ASG. | `list(string)` | `[]` | no |
 | <a name="input_cloudwatch_log_retention_days"></a> [cloudwatch\_log\_retention\_days](#input\_cloudwatch\_log\_retention\_days) | Number of days to retain CloudWatch Logs for all services (NLB access logs, ECS logs, etc.) | `number` | `365` | no |
+| <a name="input_cloudwatch_namespace"></a> [cloudwatch\_namespace](#input\_cloudwatch\_namespace) | CloudWatch namespace for custom metrics published by the OpenVPN server | `string` | `"OpenVPN/System"` | no |
 | <a name="input_efs_backup_retention_days"></a> [efs\_backup\_retention\_days](#input\_efs\_backup\_retention\_days) | Number of days to retain EFS backups. Default: 365 days (matches log retention for compliance). | `number` | `365` | no |
 | <a name="input_efs_backup_schedule"></a> [efs\_backup\_schedule](#input\_efs\_backup\_schedule) | Cron expression for EFS backup schedule. Default: daily at 2 AM UTC (cron(0 2 * * ? *)). | `string` | `"cron(0 2 * * ? *)"` | no |
 | <a name="input_enable_efs_backup"></a> [enable\_efs\_backup](#input\_enable\_efs\_backup) | Enable AWS Backup for EFS file system containing OpenVPN configuration and certificates. | `bool` | `true` | no |
