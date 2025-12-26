@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.1.0] - 2025-12-26
+
+### Features
+
+- Add CloudWatch metrics support with namespace variable
+
 ## [5.0.0] - 2025-12-09
 
 ### Bug Fixes
