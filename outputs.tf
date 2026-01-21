@@ -82,3 +82,8 @@ output "launch_template_latest_version" {
   description = "Latest version number of the OpenVPN launch template"
   value       = aws_launch_template.openvpn.latest_version
 }
+
+output "cloudwatch_log_group_name" {
+  description = "Name of the CloudWatch Log Group for OpenVPN server logs"
+  value       = aws_cloudwatch_log_group.openvpn.name
+}

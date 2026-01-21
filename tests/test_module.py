@@ -18,98 +18,76 @@ from tests.conftest import (
 )
 
 
-def verify_cloudwatch_logging(asg, boto3_session, aws_region):
+def wait_for_puppet(instance, timeout=600, poll_interval=10):
     """
-    Verify CloudWatch logging end-to-end integration for OpenVPN instances.
+    Wait for Puppet bootstrap to complete on an instance.
 
-    Validates:
-    1. CloudWatch log group is configured via Puppet facts
-    2. CloudWatch agent service is running (managed by Puppet)
-    3. CloudWatch Log Group exists in AWS
-    4. End-to-end: logs written on instance appear in CloudWatch
+    Puppet completion is indicated by the marker file /var/run/puppet-done.
 
-    Note: CloudWatch agent package, configuration, and service management
-    are Puppet's responsibility. Terraform only tests the end result.
-
-    :param asg: ASG instance
-    :param boto3_session: Boto3 session for creating AWS clients
-    :param aws_region: AWS region
+    :param instance: EC2 instance to check
+    :param timeout: Maximum time to wait in seconds (default: 600 = 10 minutes)
+    :param poll_interval: Time between checks in seconds (default: 10)
+    :raises AssertionError: If Puppet does not complete within timeout
     """
-    LOG.info("Testing CloudWatch logging end-to-end integration...")
+    LOG.info("Waiting for Puppet to complete bootstrap (up to %d seconds)...", timeout)
 
-    # Get an instance from the ASG
-    instances = list(asg.instances)
-    assert len(instances) > 0, "No instances found in ASG"
-
-    instance = instances[0]
-    LOG.info("Testing CloudWatch logging on instance: %s", instance.instance_id)
-
-    # 0. Wait for Puppet to complete (marked by /var/run/puppet-done)
-    LOG.info("0. Waiting for Puppet to complete bootstrap (up to 10 minutes)...")
-    max_wait = 600  # 10 minutes
-    poll_interval = 10
-    puppet_done = False
-
-    for attempt in range(max_wait // poll_interval):
+    for attempt in range(timeout // poll_interval):
         exit_code, stdout, stderr = instance.execute_command(
             "test -f /var/run/puppet-done && echo 'done' || echo 'not done'"
         )
 
         if exit_code == 0 and stdout.strip() == "done":
-            puppet_done = True
             LOG.info(
                 f"✓ Puppet bootstrap completed (after {(attempt + 1) * poll_interval} seconds)"
             )
-            break
+            return
 
         LOG.info(
-            f"   Puppet still running (attempt {attempt + 1}/{max_wait // poll_interval})..."
+            f"   Puppet still running (attempt {attempt + 1}/{timeout // poll_interval})..."
         )
         time.sleep(poll_interval)
 
-    assert puppet_done, (
-        f"Puppet bootstrap did not complete after {max_wait} seconds. "
+    raise AssertionError(
+        f"Puppet bootstrap did not complete after {timeout} seconds. "
         f"Marker file /var/run/puppet-done not found. "
         f"Instance may still be bootstrapping or bootstrap failed."
     )
 
-    # 1. Verify CloudWatch log group is in Puppet facts
-    LOG.info("1. Checking Puppet facts for CloudWatch log group...")
-    exit_code, stdout, stderr = instance.execute_command(
-        "sudo facter -p openvpn.cloudwatch_log_group"
-    )
-    log_group_name = stdout.strip()
-    assert (
-        log_group_name
-    ), f"CloudWatch log group not found in Puppet facts. stderr: {stderr}"
-    assert log_group_name.startswith(
-        "/aws/openvpn/"
-    ), f"Invalid log group name format: {log_group_name}"
-    LOG.info("✓ CloudWatch log group in Puppet facts: %s", log_group_name)
 
-    # 2. Verify CloudWatch agent service is running (Puppet's responsibility)
-    LOG.info("2. Verifying CloudWatch agent service is running...")
-    exit_code, stdout, stderr = instance.execute_command(
-        "systemctl is-active amazon-cloudwatch-agent"
-    )
-    assert exit_code == 0 and stdout.strip() == "active", (
-        f"CloudWatch agent service not running after Puppet bootstrap completed. "
-        f"Status: {stdout.strip()}. stderr: {stderr}"
-    )
-    LOG.info("✓ CloudWatch agent service is active")
+def verify_cloudwatch_logging(instance, log_group_name, boto3_session, aws_region):
+    """
+    Verify CloudWatch logging infrastructure created by this Terraform module.
 
-    # 3. Verify CloudWatch Log Group exists in AWS
-    LOG.info("3. Verifying CloudWatch Log Group exists in AWS...")
+    Tests that:
+    1. CloudWatch Log Group exists in AWS (created by Terraform)
+    2. Instance has IAM permissions to create log streams
+    3. Instance has IAM permissions to write log events
+    4. Logs written from instance are readable via CloudWatch API
+
+    This test is independent of Puppet configuration - it directly tests
+    the infrastructure (log group, IAM permissions) created by Terraform.
+
+    :param instance: EC2 instance to verify
+    :param log_group_name: CloudWatch log group name (from Terraform output)
+    :param boto3_session: Boto3 session for creating AWS clients
+    :param aws_region: AWS region
+    """
+    import uuid
+
+    LOG.info("Testing CloudWatch logging infrastructure...")
+    LOG.info("Instance: %s", instance.instance_id)
+    LOG.info("Log group: %s", log_group_name)
+
     logs_client = boto3_session.client("logs", region_name=aws_region)
 
+    # 1. Verify CloudWatch Log Group exists in AWS
+    LOG.info("1. Verifying CloudWatch Log Group exists...")
     try:
         response = logs_client.describe_log_groups(
             logGroupNamePrefix=log_group_name, limit=1
         )
         log_groups = response.get("logGroups", [])
-        assert (
-            len(log_groups) > 0
-        ), f"Log group {log_group_name} not found in CloudWatch"
+        assert len(log_groups) > 0, f"Log group {log_group_name} not found"
 
         log_group = log_groups[0]
         assert (
@@ -117,13 +95,6 @@ def verify_cloudwatch_logging(asg, boto3_session, aws_region):
         ), f"Log group name mismatch: {log_group['logGroupName']} != {log_group_name}"
 
         LOG.info("✓ CloudWatch Log Group exists: %s", log_group_name)
-
-        # Check if KMS encryption is enabled (optional)
-        if "kmsKeyId" in log_group:
-            LOG.info("  KMS Key: %s", log_group["kmsKeyId"])
-        else:
-            LOG.info("  Encryption: Default server-side encryption")
-
         LOG.info(
             "  Retention: %s days", log_group.get("retentionInDays", "Never expire")
         )
@@ -131,25 +102,46 @@ def verify_cloudwatch_logging(asg, boto3_session, aws_region):
     except Exception as e:
         pytest.fail(f"Failed to verify CloudWatch Log Group: {e}")
 
-    # 4. Verify end-to-end logging: write log on instance, verify it appears in CloudWatch
-    LOG.info("4. Verifying end-to-end CloudWatch Logs integration...")
+    # 2. Test instance can create log stream and write logs using AWS CLI
+    LOG.info("2. Testing instance can write to CloudWatch Logs...")
 
-    # Generate unique test message
-    import uuid
+    test_stream_name = f"test-{instance.instance_id}-{uuid.uuid4().hex[:8]}"
+    test_message = f"TEST_MESSAGE_{uuid.uuid4().hex}"
+    timestamp_ms = int(time.time() * 1000)
 
-    test_message = f"TEST_LOG_MESSAGE_{uuid.uuid4().hex}"
-    log_stream_name = f"{instance.instance_id}/auth/ssh"
-
-    # Write test message to auth.log (which is configured to ship to CloudWatch)
-    LOG.info("  Writing test message to /var/log/auth.log...")
+    # Create log stream from instance
+    LOG.info("  Creating log stream: %s", test_stream_name)
     exit_code, stdout, stderr = instance.execute_command(
-        f'echo "{test_message}" | sudo tee -a /var/log/auth.log'
+        f"aws logs create-log-stream "
+        f"--log-group-name '{log_group_name}' "
+        f"--log-stream-name '{test_stream_name}' "
+        f"--region {aws_region}"
     )
-    assert exit_code == 0, f"Failed to write test message. stderr: {stderr}"
+    assert exit_code == 0, (
+        f"Instance failed to create log stream. "
+        f"This indicates missing IAM permissions. stderr: {stderr}"
+    )
+    LOG.info("✓ Instance created log stream successfully")
 
-    # Give CloudWatch agent time to ship the log (it batches and sends periodically)
-    LOG.info("  Waiting for log to appear in CloudWatch (up to 60 seconds)...")
-    max_wait = 60
+    # Write log event from instance
+    LOG.info("  Writing test message to log stream...")
+    exit_code, stdout, stderr = instance.execute_command(
+        f"aws logs put-log-events "
+        f"--log-group-name '{log_group_name}' "
+        f"--log-stream-name '{test_stream_name}' "
+        f"--log-events 'timestamp={timestamp_ms},message={test_message}' "
+        f"--region {aws_region}"
+    )
+    assert exit_code == 0, (
+        f"Instance failed to write log event. "
+        f"This indicates missing IAM permissions. stderr: {stderr}"
+    )
+    LOG.info("✓ Instance wrote log event successfully")
+
+    # 3. Read log event from pytest to verify end-to-end
+    LOG.info("3. Verifying log event is readable from CloudWatch API...")
+
+    max_wait = 30
     poll_interval = 5
     message_found = False
 
@@ -157,20 +149,18 @@ def verify_cloudwatch_logging(asg, boto3_session, aws_region):
         time.sleep(poll_interval)
 
         try:
-            # Read recent log events from the log stream
             response = logs_client.get_log_events(
                 logGroupName=log_group_name,
-                logStreamName=log_stream_name,
-                limit=100,
-                startFromHead=False,  # Get most recent events
+                logStreamName=test_stream_name,
+                limit=10,
             )
 
-            # Check if our test message appears in the log events
             for event in response.get("events", []):
                 if test_message in event.get("message", ""):
                     message_found = True
                     LOG.info(
-                        f"  ✓ Test message found in CloudWatch after {(attempt + 1) * poll_interval} seconds"
+                        "✓ Test message found in CloudWatch after %d seconds",
+                        (attempt + 1) * poll_interval,
                     )
                     break
 
@@ -178,24 +168,50 @@ def verify_cloudwatch_logging(asg, boto3_session, aws_region):
                 break
 
         except logs_client.exceptions.ResourceNotFoundException:
-            # Log stream might not exist yet - CloudWatch agent creates it on first write
             LOG.info(
-                f"  Log stream not found yet (attempt {attempt + 1}/{max_wait // poll_interval})..."
+                "  Log stream not visible yet (attempt %d/%d)...",
+                attempt + 1,
+                max_wait // poll_interval,
             )
             continue
 
     assert message_found, (
-        f"Test message not found in CloudWatch Logs after {max_wait} seconds. "
-        f"Log group: {log_group_name}, Log stream: {log_stream_name}. "
-        f"This indicates the CloudWatch agent is not successfully shipping logs."
+        f"Test message not found in CloudWatch after {max_wait} seconds. "
+        f"Log group: {log_group_name}, Log stream: {test_stream_name}."
     )
 
-    LOG.info("✓ End-to-end CloudWatch Logs integration verified")
-    LOG.info("  - Instance can write logs")
-    LOG.info("  - CloudWatch agent ships logs to CloudWatch")
-    LOG.info("  - Logs are readable via CloudWatch Logs API")
+    # 4. Verify instance CANNOT delete log streams (least privilege)
+    LOG.info("4. Verifying instance cannot delete log streams (least privilege)...")
+    exit_code, stdout, stderr = instance.execute_command(
+        f"aws logs delete-log-stream "
+        f"--log-group-name '{log_group_name}' "
+        f"--log-stream-name '{test_stream_name}' "
+        f"--region {aws_region} 2>&1 || true"
+    )
+    # Should fail with AccessDenied
+    assert (
+        "AccessDenied" in stderr or "AccessDeniedException" in stdout or exit_code != 0
+    ), (
+        "Instance was able to delete log stream! "
+        "IAM policy grants excessive permissions - should only allow create/write."
+    )
+    LOG.info("✓ Instance correctly denied permission to delete log stream")
 
-    LOG.info("✅ All CloudWatch logging tests passed!")
+    # 5. Cleanup from pytest (has broader permissions)
+    LOG.info("5. Cleaning up test log stream...")
+    try:
+        logs_client.delete_log_stream(
+            logGroupName=log_group_name, logStreamName=test_stream_name
+        )
+        LOG.info("✓ Test log stream deleted")
+    except Exception as e:
+        LOG.warning("Failed to delete test log stream: %s", e)
+
+    LOG.info("✅ CloudWatch logging infrastructure verified!")
+    LOG.info("  - Log group exists and is accessible")
+    LOG.info("  - Instance has IAM permissions to create log streams")
+    LOG.info("  - Instance has IAM permissions to write log events")
+    LOG.info("  - Logs are readable via CloudWatch API")
 
 
 @pytest.mark.parametrize(
@@ -345,14 +361,24 @@ def test_module(
             timeout=1800,  # 30 minutes
         )
 
-        # Test CloudWatch Logging Configuration
+        # Get instance from ASG for testing
         asg = ASG(
             asg_name,
             region=aws_region,
             role_arn=test_role_arn,
         )
+        instances = list(asg.instances)
+        assert len(instances) > 0, "No instances found in ASG"
+        instance = instances[0]
+
+        # Wait for Puppet bootstrap to complete
+        wait_for_puppet(instance)
+
+        # Test CloudWatch Logging Configuration
+        log_group_name = tf_output["cloudwatch_log_group_name"]["value"]
         verify_cloudwatch_logging(
-            asg=asg,
+            instance=instance,
+            log_group_name=log_group_name,
             boto3_session=boto3_session,
             aws_region=aws_region,
         )

@@ -1471,10 +1471,10 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 5.11, < 7.0 |
-| <a name="provider_aws.dns"></a> [aws.dns](#provider\_aws.dns) | >= 5.11, < 7.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.6 |
-| <a name="provider_tls"></a> [tls](#provider\_tls) | ~> 4.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.25.0 |
+| <a name="provider_aws.dns"></a> [aws.dns](#provider\_aws.dns) | 6.25.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | 3.7.2 |
+| <a name="provider_tls"></a> [tls](#provider\_tls) | 4.1.0 |
 
 ## Modules
 
@@ -1485,7 +1485,7 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | <a name="module_google_client"></a> [google\_client](#module\_google\_client) | registry.infrahouse.com/infrahouse/secret/aws | 1.1.0 |
 | <a name="module_instance_profile"></a> [instance\_profile](#module\_instance\_profile) | registry.infrahouse.com/infrahouse/instance-profile/aws | 1.9.0 |
 | <a name="module_openvpn-portal"></a> [openvpn-portal](#module\_openvpn-portal) | registry.infrahouse.com/infrahouse/ecs/aws | 7.0.0 |
-| <a name="module_userdata"></a> [userdata](#module\_userdata) | registry.infrahouse.com/infrahouse/cloud-init/aws | 2.2.2 |
+| <a name="module_userdata"></a> [userdata](#module\_userdata) | registry.infrahouse.com/infrahouse/cloud-init/aws | 2.2.3 |
 
 ## Resources
 
@@ -1574,7 +1574,7 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | <a name="input_extra_files"></a> [extra\_files](#input\_extra\_files) | Additional files to create on an instance. | <pre>list(<br/>    object(<br/>      {<br/>        content     = string<br/>        path        = string<br/>        permissions = string<br/>      }<br/>    )<br/>  )</pre> | `[]` | no |
 | <a name="input_extra_instance_profile_permissions"></a> [extra\_instance\_profile\_permissions](#input\_extra\_instance\_profile\_permissions) | A JSON with a permissions policy document. The policy will be attached to the ASG instance profile. | `string` | `null` | no |
 | <a name="input_extra_policies"></a> [extra\_policies](#input\_extra\_policies) | A map of additional policy ARNs to attach to the jumphost role | `map(string)` | `{}` | no |
-| <a name="input_extra_repos"></a> [extra\_repos](#input\_extra\_repos) | Additional APT repositories to configure on an instance. | <pre>map(<br/>    object(<br/>      {<br/>        source   = string<br/>        key      = string<br/>        machine  = optional(string)<br/>        authFrom = optional(string)<br/>        priority = optional(number)<br/>      }<br/>    )<br/>  )</pre> | `{}` | no |
+| <a name="input_extra_repos"></a> [extra\_repos](#input\_extra\_repos) | Additional APT repositories to configure on an instance. | <pre>map(<br/>    object(<br/>      {<br/>        source    = string<br/>        key       = optional(string)<br/>        keyid     = optional(string)<br/>        keyserver = optional(string)<br/>        machine   = optional(string)<br/>        authFrom  = optional(string)<br/>        priority  = optional(number)<br/>      }<br/>    )<br/>  )</pre> | `{}` | no |
 | <a name="input_google_oauth_client_writer"></a> [google\_oauth\_client\_writer](#input\_google\_oauth\_client\_writer) | ARN of an IAM role that can update content of google\_oauth\_client secret | `string` | n/a | yes |
 | <a name="input_instance_type"></a> [instance\_type](#input\_instance\_type) | EC2 instance type for OpenVPN server instances.<br/><br/>Recommendation: c6in family (compute-optimized, network-optimized)<br/><br/>Why compute-optimized for VPN?<br/>- OpenVPN encryption/decryption is CPU-intensive<br/>- C-series instances provide better performance per dollar for VPN workloads<br/>- Higher single-thread performance benefits VPN connection handling<br/><br/>Recommended instance types:<br/>- c6in.large (DEFAULT): 2 vCPU, 4 GB RAM, 25 Gbps network - Best balance for production<br/>- c6in.xlarge: 4 vCPU, 8 GB RAM, 30 Gbps network - High user count (>100 concurrent)<br/>- c6in.2xlarge: 8 vCPU, 16 GB RAM, 40 Gbps network - Very high throughput needs<br/>- t3a.small: 2 vCPU, 2 GB RAM, 5 Gbps network - Development/testing only<br/><br/>Instance type impacts autoscaling:<br/>- var.autoscaling\_target\_network\_percentage uses the instance's baseline network bandwidth<br/>- Larger instances = higher network bandwidth threshold for autoscaling<br/>- Example: c6in.large (25 Gbps) @ 60% = scales at 15 Gbps<br/>- Example: c6in.xlarge (30 Gbps) @ 60% = scales at 18 Gbps<br/><br/>Cost comparison (us-east-1, on-demand):<br/>- c6in.large: ~$82/month (RECOMMENDED)<br/>- m6in.large: ~$102/month (general-purpose, 19% more expensive)<br/>- t3a.small: ~$15/month (testing only, limited network performance)<br/><br/>Network performance:<br/>- c6in family: 25-200 Gbps (network-optimized)<br/>- m6in family: 25-200 Gbps (network-optimized)<br/>- m7i family: Up to 12.5 Gbps (general-purpose)<br/>- t3/t3a family: Up to 5 Gbps (burstable)<br/><br/>When to use different instance families:<br/>- c6in: Best for production VPN (CPU + network optimized)<br/>- m6in/m7i: If you need more RAM for additional services<br/>- t3/t3a: Development, testing, or very low user count (<10 users)<br/><br/>Default: "c6in.large" | `string` | `"c6in.large"` | no |
 | <a name="input_key_pair_name"></a> [key\_pair\_name](#input\_key\_pair\_name) | SSH keypair name for accessing OpenVPN server instances.<br/><br/>⚠️  SECURITY WARNING:<br/>- SSH access should be limited to emergency troubleshooting only<br/>- Use AWS Systems Manager Session Manager for routine access instead<br/>- Restrict security group to allow SSH only from trusted IP ranges<br/>- Consider using short-lived SSH certificates instead of long-lived keys<br/>- Rotate SSH keys regularly<br/>- Monitor SSH access via CloudWatch and VPC Flow Logs<br/><br/>The key pair must exist in AWS before applying this module.<br/><br/>If not specified (null), the module will generate a temporary key pair.<br/>However, for production use, you should provide a managed key pair.<br/><br/>Example: "my-openvpn-emergency-key"<br/><br/>Default: null (module generates a temporary key) | `string` | `null` | no |
@@ -1607,6 +1607,7 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | Name | Description |
 |------|-------------|
 | <a name="output_autoscaling_group_name"></a> [autoscaling\_group\_name](#output\_autoscaling\_group\_name) | Name of the autoscaling group managing the OpenVPN instances |
+| <a name="output_cloudwatch_log_group_name"></a> [cloudwatch\_log\_group\_name](#output\_cloudwatch\_log\_group\_name) | Name of the CloudWatch Log Group for OpenVPN server logs |
 | <a name="output_efs_dns_name"></a> [efs\_dns\_name](#output\_efs\_dns\_name) | DNS name of the EFS file system mount target for accessing shared OpenVPN configuration |
 | <a name="output_efs_file_system_id"></a> [efs\_file\_system\_id](#output\_efs\_file\_system\_id) | ID of the EFS file system used for storing OpenVPN configuration and certificates |
 | <a name="output_efs_security_group_id"></a> [efs\_security\_group\_id](#output\_efs\_security\_group\_id) | ID of the security group attached to the EFS file system for OpenVPN configuration storage |
