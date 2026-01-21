@@ -15,3 +15,8 @@ output "autoscaling_group_name" {
   description = "Name of the autoscaling group managing the OpenVPN instances"
   value       = module.openvpn.autoscaling_group_name
 }
+
+output "cloudwatch_log_group_name" {
+  description = "Name of the CloudWatch Log Group for OpenVPN server logs"
+  value       = module.openvpn.cloudwatch_log_group_name
+}

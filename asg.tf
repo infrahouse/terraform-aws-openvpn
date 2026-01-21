@@ -1,7 +1,7 @@
 
 module "userdata" {
   source                   = "registry.infrahouse.com/infrahouse/cloud-init/aws"
-  version                  = "2.2.2"
+  version                  = "2.2.3"
   environment              = var.environment
   role                     = "openvpn_server"
   puppet_debug_logging     = var.puppet_debug_logging
@@ -21,9 +21,6 @@ module "userdata" {
       "nfs-common",
     ]
   )
-  post_runcmd = [
-    "touch /var/run/puppet-done"
-  ]
   extra_files = var.extra_files
   extra_repos = var.extra_repos
 
