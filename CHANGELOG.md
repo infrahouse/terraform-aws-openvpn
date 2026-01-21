@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2.0] - 2026-01-21
+
+### Build
+
+- Migrate to cloud-init module 2.2.3
+- Update secret module to 1.1.1
+
 ## [5.1.0] - 2025-12-26
 
 ### Features
