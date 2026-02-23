@@ -21,8 +21,9 @@ module "userdata" {
       "nfs-common",
     ]
   )
-  extra_files = var.extra_files
-  extra_repos = var.extra_repos
+  gzip_userdata = var.gzip_userdata
+  extra_files   = var.extra_files
+  extra_repos   = var.extra_repos
 
   custom_facts = merge(
     var.puppet_custom_facts,

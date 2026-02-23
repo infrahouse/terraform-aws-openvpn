@@ -152,6 +152,22 @@ variable "environment" {
   }
 }
 
+variable "gzip_userdata" {
+  description = <<-EOT
+    Whether to gzip compress the cloud-init userdata before base64 encoding.
+
+    When true, the userdata is gzip-compressed, significantly reducing its size.
+    This is important because AWS limits EC2 userdata to 16 KB.
+
+    The OpenVPN module's userdata can exceed this limit when extra_repos includes
+    embedded GPG keys (~3-6 KB each), multiple SSH users, or extensive custom_facts.
+
+    Default: true (recommended to avoid hitting the 16 KB limit)
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "extra_files" {
   description = "Additional files to create on an instance."
   type = list(
