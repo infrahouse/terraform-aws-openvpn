@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.3.0] - 2026-02-24
+
+### Bug Fixes
+
+- Enable gzip compression for userdata to avoid EC2 16KB limit
+
 ## [5.2.0] - 2026-01-21
 
 ### Build
