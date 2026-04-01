@@ -1,6 +1,6 @@
 module "openvpn-portal" {
   source  = "registry.infrahouse.com/infrahouse/ecs/aws"
-  version = "7.0.0"
+  version = "7.13.1"
   providers = {
     aws     = aws
     aws.dns = aws.dns
