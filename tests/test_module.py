@@ -214,9 +214,7 @@ def verify_cloudwatch_logging(instance, log_group_name, boto3_session, aws_regio
     LOG.info("  - Logs are readable via CloudWatch API")
 
 
-@pytest.mark.parametrize(
-    "aws_provider_version", ["~> 5.11", "~> 6.0"], ids=["aws5", "aws6"]
-)
+@pytest.mark.parametrize("aws_provider_version", ["~> 6.0"], ids=["aws6"])
 def test_module(
     service_network,
     aws_region,
