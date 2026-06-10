@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.0.0] - 2026-06-10
+
+### Features
+
+- Enable cross-region replication for portal access-log bucket
+
+### Miscellaneous Tasks
+
+- Bump security dependencies
+
 ## [5.3.0] - 2026-02-24
 
 ### Bug Fixes
