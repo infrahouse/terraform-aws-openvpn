@@ -1,3 +1,11 @@
 checkov ~= 3.2
-infrahouse-core ~= 0.17
-pytest-infrahouse ~= 0.23
+
+infrahouse-core ~= 1.1
+pytest-infrahouse ~= 0.24
+
+
+# Documentation dependencies
+diagrams ~= 0.25
+mkdocs-material ~= 9.7
+mkdocs-minify-plugin ~= 0.8
+mkdocs-glightbox ~= 0.4

@@ -39,7 +39,7 @@ data "aws_iam_policy_document" "instance_permissions" {
       "autoscaling:SetInstanceHealth",
     ]
     resources = [
-      "arn:aws:autoscaling:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.asg_name}"
+      "arn:aws:autoscaling:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.asg_name}"
     ]
   }
   # CloudWatch Logs permissions for shipping OpenVPN application logs

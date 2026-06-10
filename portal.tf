@@ -1,6 +1,6 @@
 module "openvpn-portal" {
   source  = "registry.infrahouse.com/infrahouse/ecs/aws"
-  version = "7.13.1"
+  version = "8.1.0"
   providers = {
     aws     = aws
     aws.dns = aws.dns
@@ -27,6 +27,7 @@ module "openvpn-portal" {
   container_cpu                             = 400 # One vCPU is 1024
   container_memory                          = 200 # Value in MB
   access_log_force_destroy                  = var.alb_access_log_force_destroy
+  replication_region                        = var.replication_region
   cloudwatch_log_group_retention            = var.cloudwatch_log_retention_days
   cloudinit_extra_commands                  = var.cloudinit_extra_commands
 
@@ -57,7 +58,7 @@ module "openvpn-portal" {
       },
       {
         name : "AWS_DEFAULT_REGION",
-        value : data.aws_region.current.name
+        value : data.aws_region.current.region
       },
       {
         name : "FLASK_SECRET_KEY",

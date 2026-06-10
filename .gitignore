@@ -39,6 +39,7 @@ __pycache__
 pytest-*-output.log
 
 # Claude Code local settings
+.claude/plans/*.local.md
 .claude/*.local.json
 .claude/reviews/
 nul
