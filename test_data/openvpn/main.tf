@@ -20,8 +20,10 @@ module "openvpn" {
   portal-image                 = "${data.aws_caller_identity.this.account_id}.dkr.ecr.${var.region}.amazonaws.com/portal:latest"
   google_oauth_client_writer   = tolist(data.aws_iam_roles.sso-admin.arns)[0]
   alb_access_log_force_destroy = true
-  portal_workers_count         = 1
-  key_pair_name                = aws_key_pair.black-mbp.key_name
+  # CRR replica must differ from the deploy region; flip to us-west-2 if the test runs in us-east-1
+  replication_region   = var.region == "us-east-1" ? "us-west-2" : "us-east-1"
+  portal_workers_count = 1
+  key_pair_name        = aws_key_pair.black-mbp.key_name
   allowed_domains = [
     "infrahouse.com",
     "tinyfish.io",

@@ -1463,7 +1463,7 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.5 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 5.11, < 7.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.0 |
 | <a name="requirement_random"></a> [random](#requirement\_random) | ~> 3.6 |
 | <a name="requirement_tls"></a> [tls](#requirement\_tls) | ~> 4.0 |
 
@@ -1471,10 +1471,10 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.25.0 |
-| <a name="provider_aws.dns"></a> [aws.dns](#provider\_aws.dns) | 6.25.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | 3.7.2 |
-| <a name="provider_tls"></a> [tls](#provider\_tls) | 4.1.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 6.0 |
+| <a name="provider_aws.dns"></a> [aws.dns](#provider\_aws.dns) | ~> 6.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.6 |
+| <a name="provider_tls"></a> [tls](#provider\_tls) | ~> 4.0 |
 
 ## Modules
 
@@ -1484,7 +1484,7 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | <a name="module_flask_secret_key"></a> [flask\_secret\_key](#module\_flask\_secret\_key) | registry.infrahouse.com/infrahouse/secret/aws | 1.1.1 |
 | <a name="module_google_client"></a> [google\_client](#module\_google\_client) | registry.infrahouse.com/infrahouse/secret/aws | 1.1.1 |
 | <a name="module_instance_profile"></a> [instance\_profile](#module\_instance\_profile) | registry.infrahouse.com/infrahouse/instance-profile/aws | 1.9.0 |
-| <a name="module_openvpn-portal"></a> [openvpn-portal](#module\_openvpn-portal) | registry.infrahouse.com/infrahouse/ecs/aws | 7.13.1 |
+| <a name="module_openvpn-portal"></a> [openvpn-portal](#module\_openvpn-portal) | registry.infrahouse.com/infrahouse/ecs/aws | 8.1.0 |
 | <a name="module_userdata"></a> [userdata](#module\_userdata) | registry.infrahouse.com/infrahouse/cloud-init/aws | 2.2.3 |
 
 ## Resources
@@ -1594,6 +1594,7 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | <a name="input_puppet_manifest"></a> [puppet\_manifest](#input\_puppet\_manifest) | Path to puppet manifest. By default ih-puppet will apply {root\_directory}/environments/{environment}/manifests/site.pp. | `string` | `null` | no |
 | <a name="input_puppet_module_path"></a> [puppet\_module\_path](#input\_puppet\_module\_path) | Path to common puppet modules. | `string` | `"{root_directory}/environments/{environment}/modules:{root_directory}/modules"` | no |
 | <a name="input_puppet_root_directory"></a> [puppet\_root\_directory](#input\_puppet\_root\_directory) | Path where the puppet code is hosted. | `string` | `"/opt/puppet-code"` | no |
+| <a name="input_replication_region"></a> [replication\_region](#input\_replication\_region) | AWS region for cross-region replication of the OpenVPN portal ALB access-log bucket.<br/>The portal ALB access logs are an audit record under the compliance policy and require<br/>cross-region replication to pass the Vanta aws-s3-cross-region-replication-enabled test.<br/><br/>Must differ from the region this module is deployed in: a same-region replica still fails<br/>the Vanta CRR test. For example, a us-west-1 deployment can replicate to "us-east-1", while<br/>a us-east-1 deployment must pick a different region such as "us-west-2". | `string` | n/a | yes |
 | <a name="input_root_volume_size"></a> [root\_volume\_size](#input\_root\_volume\_size) | Root volume size in EC2 instance in Gigabytes | `number` | `30` | no |
 | <a name="input_routes"></a> [routes](#input\_routes) | List of network routes to push to VPN clients.<br/><br/>These routes tell VPN clients which traffic should be sent through the VPN tunnel.<br/>Commonly used to route RFC1918 private networks or specific application networks.<br/><br/>Format:<br/>- network: Network address in IPv4 format (e.g., "10.0.0.0")<br/>- netmask: Network mask in IPv4 format (e.g., "255.0.0.0")<br/><br/>Example:<br/>routes = [<br/>  {<br/>    network = "10.0.0.0"<br/>    netmask = "255.0.0.0"<br/>  },<br/>  {<br/>    network = "172.16.0.0"<br/>    netmask = "255.240.0.0"<br/>  }<br/>]<br/><br/>Note: Routes are pushed to clients via OpenVPN configuration.<br/>Clients will route matching traffic through the VPN tunnel.<br/><br/>Default: [] (no custom routes - only VPN subnet routed through tunnel) | <pre>list(<br/>    object(<br/>      {<br/>        network : string,<br/>        netmask : string<br/>      }<br/>    )<br/>  )</pre> | `[]` | no |
 | <a name="input_service_name"></a> [service\_name](#input\_service\_name) | Service name used for DNS hostname and resource naming.<br/><br/>This value is used to:<br/>- Create the Route53 DNS record (e.g., openvpn.example.com)<br/>- Name EC2 instances and other AWS resources<br/>- Generate CloudWatch log group names (/aws/openvpn/{environment}/{service\_name})<br/>- Prefix autoscaling policy names<br/><br/>Default: "openvpn" | `string` | `"openvpn"` | no |

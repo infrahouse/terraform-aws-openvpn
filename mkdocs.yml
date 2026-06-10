@@ -1,4 +1,4 @@
-site_name: InfraHouse terraform-aws-openvpn
+site_name: InfraHouse openvpn
 site_url: https://infrahouse.github.io/terraform-aws-openvpn/
 site_description: Terraform module documentation
 site_author: InfraHouse
@@ -36,6 +36,12 @@ theme:
 
 nav:
   - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - Configuration: configuration.md
+  - Examples: examples.md
+  - Troubleshooting: troubleshooting.md
+  - Changelog: changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -61,6 +67,7 @@ markdown_extensions:
 
 plugins:
   - search
+  - glightbox
   - minify:
       minify_html: true
 

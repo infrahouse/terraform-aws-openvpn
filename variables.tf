@@ -4,6 +4,19 @@ variable "alb_access_log_force_destroy" {
   default     = false
 }
 
+variable "replication_region" {
+  description = <<-EOT
+    AWS region for cross-region replication of the OpenVPN portal ALB access-log bucket.
+    The portal ALB access logs are an audit record under the compliance policy and require
+    cross-region replication to pass the Vanta aws-s3-cross-region-replication-enabled test.
+
+    Must differ from the region this module is deployed in: a same-region replica still fails
+    the Vanta CRR test. For example, a us-west-1 deployment can replicate to "us-east-1", while
+    a us-east-1 deployment must pick a different region such as "us-west-2".
+  EOT
+  type        = string
+}
+
 variable "allowed_domains" {
   description = <<-EOT
     List of Google Workspace domains whose users are allowed to connect to the VPN.
