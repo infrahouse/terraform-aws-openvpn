@@ -1,7 +1,7 @@
 
 module "userdata" {
   source                   = "registry.infrahouse.com/infrahouse/cloud-init/aws"
-  version                  = "2.2.3"
+  version                  = "2.4.0"
   environment              = var.environment
   role                     = "openvpn_server"
   puppet_debug_logging     = var.puppet_debug_logging
