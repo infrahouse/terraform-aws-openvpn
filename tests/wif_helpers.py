@@ -44,15 +44,16 @@ def google_credentials():
     from google.auth import default as google_auth_default
     from google.auth.exceptions import DefaultCredentialsError
 
-    # Resolve the project up front so we can hand it to google.auth.default as
-    # the quota project. That is the project everything targets anyway, and
-    # supplying it silences google-auth's spurious "no quota project" warning.
     project = os.environ.get("GOOGLE_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
 
+    # Do NOT pass quota_project_id here. It only silences a cosmetic warning for
+    # local gcloud (user) credentials, and it adds an x-goog-user-project header
+    # that breaks CI: with GitHub-OIDC -> SA impersonation, that header is checked
+    # against the *federated* principal (not the SA), which lacks
+    # serviceusage.services.use -> USER_PROJECT_DENIED. Everything targets the
+    # project explicitly anyway, so no quota project is needed.
     try:
-        credentials, adc_project = google_auth_default(
-            scopes=[CLOUD_PLATFORM_SCOPE], quota_project_id=project
-        )
+        credentials, adc_project = google_auth_default(scopes=[CLOUD_PLATFORM_SCOPE])
     except DefaultCredentialsError:
         pytest.fail(
             "No Google Application Default Credentials, but the openvpn module "
@@ -108,8 +109,8 @@ def _verify_credentials_usable(credentials, project):
         pytest.fail(
             f"Google credentials work but cannot list services in {project}: {error}\n"
             "The identity needs, in that project: serviceusage.serviceUsageAdmin, "
-            "serviceusage.serviceUsageConsumer, iam.serviceAccountAdmin, and "
-            "iam.workloadIdentityPoolAdmin (see scripts/setup-ci-gcp-auth.sh)."
+            "iam.serviceAccountAdmin, and iam.workloadIdentityPoolAdmin "
+            "(see scripts/setup-ci-gcp-auth.sh)."
         )
 
     # The call above just succeeded, so any "quota project" warning google-auth
