@@ -2,6 +2,14 @@ resource "aws_key_pair" "black-mbp" {
   public_key = file("${path.module}/files/mediapc.pub")
 }
 
+# Unique per-run suffix for the WIF pool/provider/SA ids, held in state so a
+# destroy+recreate never collides with GCP's ~30-day soft-deleted ids.
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 module "openvpn" {
   source = "../../"
   providers = {
@@ -35,4 +43,11 @@ module "openvpn" {
       netmask : cidrnetmask(data.aws_vpc.mgmt.cidr_block)
     }
   ]
+
+  # Keyless Google Workspace directory revocation (feature under test).
+  enable_google_directory_revocation = true
+  google_workspace_admin_email       = var.google_workspace_admin_email
+  google_wif_pool_id                 = "ovpn-wif-${random_string.suffix.result}"
+  google_wif_provider_id             = "aws-ovpn-${random_string.suffix.result}"
+  google_directory_reader_sa_id      = "ovpn-dir-${random_string.suffix.result}"
 }

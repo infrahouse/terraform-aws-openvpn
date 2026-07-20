@@ -1433,27 +1433,24 @@ make test
 #### Test Data Location
 
 Test fixtures are in `test_data/`:
-- `test_data/openvpn/` - Main test configuration
+- `test_data/openvpn/` - Test configuration (turns the WIF feature on)
 - `test_data/openvpn/ecr.tf` - Test ECR repository (for custom portal images)
 - `test_data/openvpn/main.tf` - Test module invocation
-- `test_data/google_wif/` - Test configuration for the Google WIF feature
 
-### Testing the Google WIF Feature
+### GCP credentials are required
 
-`tests/test_google_wif.py::test_google_wif` covers the Google Workload Identity
-Federation integration (`enable_google_directory_revocation = true`, defined in
-`google-wif.tf`). It stands up the full module against AWS **and** the real GCP
-project, then uses the Google API client libraries to verify the keyless
-federation was created correctly:
+Since v7.0.0 the module always requires a `google` provider, and
+`tests/test_module.py` turns the WIF feature on. So the single integration test
+stands the module up against AWS **and** the real GCP project in one run, and
+also verifies the keyless federation (via `tests/wif_helpers.py`):
 
 - the directory-reader service account exists and has **no** user-managed keys,
 - the workload identity pool and its AWS provider exist and are `ACTIVE`,
 - the service account grants `workloadIdentityUser` and
   `serviceAccountTokenCreator` to a `principalSet` scoped to that pool.
 
-This test is separate from `test_module` so the regular AWS test suite never
-requires GCP credentials. If no Google credentials are available, the test is
-**skipped** rather than failed.
+Because the module cannot apply without GCP, the test **fails** (not skips) when
+GCP credentials are missing — there is no AWS-only path anymore.
 
 #### Prerequisites
 
@@ -1462,19 +1459,17 @@ requires GCP credentials. If no Google credentials are available, the test is
    brew install --cask google-cloud-sdk
    ```
 
-2. **Authenticate with Application Default Credentials (ADC).** The same ADC
-   mechanism works locally and in GitHub Actions, so no service-account key is
-   ever stored:
+2. **Authenticate with Application Default Credentials (ADC).** Same mechanism
+   locally and in CI, so no service-account key is stored:
    ```shell
    gcloud auth application-default login
    ```
-   You do **not** need `gcloud auth application-default set-quota-project`: the
-   test and the `google` provider both pass the project explicitly (via
-   `GOOGLE_PROJECT`), so the "quota project" warning google-auth prints is
-   harmless and can be ignored. The test logs a reminder to that effect after it
-   verifies the credentials work.
+   `gcloud auth application-default set-quota-project` is **not** needed — the
+   test and provider pass the project explicitly (via `GOOGLE_PROJECT`), so the
+   "quota project" warning google-auth prints is harmless. In CI, GCP auth is
+   set up keylessly with `scripts/setup-ci-gcp-auth.sh` + `google-github-actions/auth`.
 
-3. **GCP permissions.** Your identity needs, in the target project, roughly:
+3. **GCP permissions.** Your identity needs, in the target project:
    - `roles/iam.serviceAccountAdmin`
    - `roles/iam.workloadIdentityPoolAdmin`
    - `roles/serviceusage.serviceUsageAdmin` (to enable the required APIs)
@@ -1485,29 +1480,19 @@ requires GCP credentials. If no Google credentials are available, the test is
 #### Running
 
 ```shell
-# Run and destroy resources afterwards (uses GOOGLE_PROJECT from the Makefile,
-# which defaults to openvpn-427715)
-make test-google-wif-clean
-
-# Run and keep resources for debugging
-make test-google-wif-keep
-
-# Override the GCP project
-GOOGLE_PROJECT=my-project make test-google-wif-clean
+make test-clean   # run, then destroy resources (uses GOOGLE_PROJECT, default openvpn-427715)
+make test-keep    # run and keep resources for debugging
+GOOGLE_PROJECT=my-project make test-clean   # override the project
 ```
 
-The project can also be supplied via the `GOOGLE_PROJECT` / `GOOGLE_CLOUD_PROJECT`
-environment variable; if unset, the test falls back to the ADC quota project.
-The Workspace admin the directory-reader SA impersonates defaults to
-`aleks@infrahouse.com` and can be overridden with `GOOGLE_DIRECTORY_ADMIN_SUBJECT`.
+The Workspace admin the SA impersonates defaults to `aleks@infrahouse.com`;
+override with `GOOGLE_WORKSPACE_ADMIN_EMAIL`.
 
 > **Note:** The one step Terraform cannot perform — authorizing the SA's client
 > ID for the directory scope via
 > [Domain-wide delegation](https://admin.google.com/ac/owl/domainwidedelegation)
-> — is **not** exercised by this test. It verifies everything the module
-> creates, but not that manual console step. Each test run generates a fresh
-> service account (and therefore a new client ID), so authorizing DWD per run is
-> impractical; use
+> — is **not** exercised by the test. Each run generates a fresh service account
+> (new client ID), so authorizing DWD per run is impractical; use
 > [`verify-wif.sh`](#google-directory-revocation-keyless-wif) on an instance to
 > check the delegation path by hand.
 

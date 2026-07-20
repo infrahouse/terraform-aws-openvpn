@@ -16,6 +16,7 @@ from tests.conftest import (
     LOG,
     TERRAFORM_ROOT_DIR,
 )
+from tests.wif_helpers import google_credentials, verify_google_wif
 
 
 def wait_for_puppet(instance, timeout=600, poll_interval=10):
@@ -229,48 +230,55 @@ def test_module(
 
     terraform_module_dir = osp.join(TERRAFORM_ROOT_DIR, "openvpn")
 
+    # The module requires a Google provider (v7.0.0+) and this stack turns the
+    # WIF feature on, so resolve GCP credentials up front -- fail fast here rather
+    # than many minutes into apply if they are missing or expired.
+    credentials, google_project = google_credentials()
+    admin_email = os.environ.get("GOOGLE_WORKSPACE_ADMIN_EMAIL", "aleks@infrahouse.com")
+
     # Clean up any existing Terraform state and lock files
     check_call(
         ["rm", "-rf", ".terraform", ".terraform.lock.hcl"], cwd=terraform_module_dir
     )
 
-    # Update terraform.tf with the specified AWS provider version
-    terraform_tf_content = dedent(
-        f"""
+    # Update terraform.tf with the specified AWS provider version. google and
+    # random are declared too: the root configures a Google provider and owns a
+    # random_string for the per-run WIF ids.
+    terraform_tf_content = dedent(f"""
         terraform {{
           required_providers {{
             aws = {{
               source  = "hashicorp/aws"
               version = "{aws_provider_version}"
             }}
+            google = {{
+              source  = "hashicorp/google"
+              version = "~> 6.0"
+            }}
+            random = {{
+              source  = "hashicorp/random"
+              version = "~> 3.0"
+            }}
           }}
         }}
-        """
-    )
+        """)
 
     with open(osp.join(terraform_module_dir, "terraform.tf"), "w") as fp:
         fp.write(terraform_tf_content)
 
     with open(osp.join(terraform_module_dir, "terraform.tfvars"), "w") as fp:
-        fp.write(
-            dedent(
-                f"""
-                region       = "{aws_region}"
-                test_zone    = "{test_zone_name}"
+        fp.write(dedent(f"""
+                region    = "{aws_region}"
+                test_zone = "{test_zone_name}"
 
                 lb_subnet_ids      = {json.dumps(subnet_public_ids)}
                 backend_subnet_ids = {json.dumps(subnet_public_ids)}
-                """
-            )
-        )
+
+                google_project               = "{google_project}"
+                google_workspace_admin_email = "{admin_email}"
+                """))
         if test_role_arn:
-            fp.write(
-                dedent(
-                    f"""
-                    role_arn = "{test_role_arn}"
-                    """
-                )
-            )
+            fp.write(f'\nrole_arn = "{test_role_arn}"\n')
 
     LOG.info("Testing with AWS provider version: %s", aws_provider_version)
 
@@ -396,3 +404,6 @@ def test_module(
         )
         LOG.info("Portal services restarted")
         LOG.info("Portal URL: %s", tf_output["portal_url"]["value"])
+
+        # Verify the keyless Google WIF side stood up correctly (same stack).
+        verify_google_wif(tf_output, credentials)
