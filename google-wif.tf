@@ -133,6 +133,10 @@ resource "google_iam_workload_identity_pool" "openvpn" {
 }
 
 resource "google_iam_workload_identity_pool_provider" "aws" {
+  # checkov:skip=CKV_GCP_125:This is an AWS provider, not a GitHub Actions OIDC trust policy. The check
+  # reads conf["oidc"][0] before testing the issuer, so it raises TypeError on any non-OIDC provider and
+  # its broad except returns FAILED -- contradicting its own "if it's not OIDC ... then pass" branch.
+  # Federation here is locked down by attribute_condition below (pinned to one assumed-role ARN).
   count = local.gcount
 
   workload_identity_pool_id          = google_iam_workload_identity_pool.openvpn[0].workload_identity_pool_id
