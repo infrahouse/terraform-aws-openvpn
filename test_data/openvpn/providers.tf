@@ -14,7 +14,8 @@ provider "aws" {
   }
 }
 
-# Required by the openvpn module even with the WIF feature off. Empty and
-# uncredentialed on purpose: enable_google_directory_revocation defaults to
-# false, so no google resource exists and this provider is never configured.
-provider "google" {}
+# The WIF feature is on in this test, so the google provider must be configured.
+# Authenticates via ADC (gcloud locally, google-github-actions/auth in CI).
+provider "google" {
+  project = var.google_project
+}

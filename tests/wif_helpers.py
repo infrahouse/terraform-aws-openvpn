@@ -1,60 +1,52 @@
 """
-Integration test for the Google Workload Identity Federation (WIF) feature
-defined in ``google-wif.tf`` (``enable_google_directory_revocation = true``).
+Helpers for verifying the Google Workload Identity Federation (WIF) side of the
+openvpn module (``enable_google_directory_revocation = true``).
 
-It stands up the ``openvpn`` module against a real AWS account **and** a real
-GCP project, then verifies -- with the Google API client libraries -- that the
-keyless federation was created correctly on the GCP side:
+Since v7.0.0 the module always requires a ``google`` provider, so the module
+cannot be applied without working GCP credentials. These helpers therefore
+**fail** (not skip) when credentials are missing or unusable -- an environment
+that cannot reach GCP cannot exercise the module at all.
 
-* the directory-reader service account exists and has **no** user-managed keys
-  (the whole point of WIF is "no key at rest"),
+Used by ``tests/test_module.py``, which stands the module up once and verifies
+both the AWS side and the keyless federation on GCP:
+
+* the directory-reader service account exists and has **no** user-managed keys,
 * the workload identity pool and its AWS provider exist and are ACTIVE,
 * the SA grants ``workloadIdentityUser`` and ``serviceAccountTokenCreator`` to a
   ``principalSet`` scoped to that pool.
-
-Authentication uses Application Default Credentials (ADC) for both Terraform's
-``google`` provider and this test's API calls, so the same test runs locally
-(``gcloud auth application-default login``) and in GitHub Actions
-(``google-github-actions/auth``). If no ADC / project is available the test is
-skipped rather than failed.
 """
 
 import json
 import os
-from os import path as osp
-from subprocess import check_call
-from textwrap import dedent
 
 import pytest
-from pytest_infrahouse import terraform_apply
-from pytest_infrahouse.utils import wait_for_instance_refresh
 
-from tests.conftest import (
-    LOG,
-    TERRAFORM_ROOT_DIR,
-)
+from tests.conftest import LOG
 
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 WORKLOAD_IDENTITY_USER_ROLE = "roles/iam.workloadIdentityUser"
 TOKEN_CREATOR_ROLE = "roles/iam.serviceAccountTokenCreator"
 
 
-def _google_credentials():
+def google_credentials():
     """
-    Resolve Google ADC and the target project, or skip the test.
+    Resolve Google ADC and the target project, failing the test if unavailable.
+
+    The openvpn module requires a configured google provider (v7.0.0+), so a run
+    without GCP credentials cannot apply the module -- that is a failure, not a
+    skip.
 
     :return: Tuple of (credentials, project_id).
     :rtype: tuple
     """
-    # Imported lazily so the rest of the suite does not require the Google
-    # libraries to be installed.
+    # Imported lazily so importing this module does not require the Google
+    # libraries when they are not needed.
     from google.auth import default as google_auth_default
     from google.auth.exceptions import DefaultCredentialsError
 
     # Resolve the project up front so we can hand it to google.auth.default as
     # the quota project. That is the project everything targets anyway, and
-    # supplying it is what silences google-auth's "no quota project" warning --
-    # no `gcloud set-quota-project` (which mutates global ADC state) required.
+    # supplying it silences google-auth's spurious "no quota project" warning.
     project = os.environ.get("GOOGLE_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
 
     try:
@@ -62,17 +54,18 @@ def _google_credentials():
             scopes=[CLOUD_PLATFORM_SCOPE], quota_project_id=project
         )
     except DefaultCredentialsError:
-        pytest.skip(
-            "No Google Application Default Credentials. Run "
+        pytest.fail(
+            "No Google Application Default Credentials, but the openvpn module "
+            "requires a google provider (v7.0.0+). Run "
             "`gcloud auth application-default login` locally, or configure "
             "google-github-actions/auth in CI."
         )
 
     project = project or adc_project
     if not project:
-        pytest.skip(
-            "No GCP project resolved. Set GOOGLE_PROJECT (or configure a "
-            "quota project on your ADC)."
+        pytest.fail(
+            "No GCP project resolved. Set GOOGLE_PROJECT (or a quota project on "
+            "your ADC)."
         )
 
     _verify_credentials_usable(credentials, project)
@@ -86,15 +79,14 @@ def _verify_credentials_usable(credentials, project):
     built.
 
     Resolving ADC only proves credentials *exist*; it does not prove they can
-    still call an API. Expired reauth (RAPT) tokens resolve fine and then fail
-    at the first sensitive call, so without this check the run dies ~6 minutes
-    in -- after creating a hundred-plus AWS resources -- on an opaque
-    ``invalid_rapt``. Calling the same API Terraform hits first (serviceusage,
-    to enable the required APIs) surfaces that in about a second.
+    still call an API. Expired reauth (RAPT) tokens resolve fine and then fail at
+    the first sensitive call, so without this check the run dies many minutes in
+    -- after building the full stack -- on an opaque ``invalid_rapt``. Calling
+    the same API Terraform hits first (serviceusage) surfaces it in about a
+    second.
 
     :param credentials: Google ADC credentials.
     :param project: GCP project id the test runs against.
-    :raise Failed: if the credentials cannot call the serviceusage API.
     """
     from google.auth.exceptions import RefreshError
     from googleapiclient.discovery import build
@@ -120,9 +112,8 @@ def _verify_credentials_usable(credentials, project):
         )
 
     # The call above just succeeded, so any "quota project" warning google-auth
-    # printed is a false alarm: this test (and the google provider) target the
-    # project explicitly, so no ADC quota project is needed. Say so, next to the
-    # warning, to save the reader a `set-quota-project` detour.
+    # printed is a false alarm: everything targets the project explicitly, so no
+    # ADC quota project is needed. Say so, next to the warning.
     LOG.info(
         "✓ Google credentials verified against %s. Ignore any 'quota project' "
         "warning above -- the project is passed explicitly, none is needed.",
@@ -130,7 +121,7 @@ def _verify_credentials_usable(credentials, project):
     )
 
 
-def _iam_service(credentials):
+def iam_service(credentials):
     """
     Build the IAM v1 API client used for all GCP-side assertions.
 
@@ -193,7 +184,7 @@ def verify_pool_and_provider(iam, audience):
 
     The full resource names are parsed out of the credential-config ``audience``
     (``//iam.googleapis.com/projects/N/locations/global/workloadIdentityPools/POOL/providers/PROVIDER``)
-    so the test never has to reconstruct them.
+    so the caller never has to reconstruct them.
 
     :param iam: IAM v1 API client.
     :param audience: The ``audience`` field from the WIF credential config.
@@ -289,86 +280,32 @@ def verify_credential_config(cred_config, expected_pool_id, expected_provider_id
     assert "service_account_impersonation" not in json.dumps(cred_config)
 
 
-def test_google_wif(
-    service_network,
-    aws_region,
-    test_role_arn,
-    test_zone_name,
-    boto3_session,
-    keep_after,
-):
-    credentials, google_project = _google_credentials()
-    iam = _iam_service(credentials)
+def verify_google_wif(tf_output, credentials):
+    """
+    Run the full WIF verification against a module's terraform output.
 
-    subnet_public_ids = service_network["subnet_public_ids"]["value"]
-    terraform_module_dir = osp.join(TERRAFORM_ROOT_DIR, "google_wif")
+    :param tf_output: The parsed ``terraform output`` of a stack that has
+        ``enable_google_directory_revocation = true``.
+    :param credentials: Google ADC credentials (from ``google_credentials()``).
+    """
+    iam = iam_service(credentials)
 
-    # The unique per-environment suffix for the pool/provider/SA ids is owned by
-    # Terraform (random_string in the test root), which avoids GCP's ~30-day
-    # soft-delete id collisions. The concrete ids come back as outputs below.
-    admin_email = os.environ.get("GOOGLE_WORKSPACE_ADMIN_EMAIL", "aleks@infrahouse.com")
+    sa_email = tf_output["google_directory_reader_sa_email"]["value"]
+    client_id = tf_output["google_directory_reader_client_id"]["value"]
+    cred_config = json.loads(tf_output["google_wif_credential_config_json"]["value"])
+    pool_id = tf_output["wif_pool_id"]["value"]
+    provider_id = tf_output["wif_provider_id"]["value"]
+    sa_id = tf_output["wif_sa_id"]["value"]
 
-    # Clean up any stale local state/lock from a previous run.
-    check_call(
-        ["rm", "-rf", ".terraform", ".terraform.lock.hcl"], cwd=terraform_module_dir
-    )
+    # --- Output shape checks (cheap, no API calls) --------------------------
+    assert sa_email.startswith(f"{sa_id}@")
+    assert sa_email.endswith(".iam.gserviceaccount.com")
+    assert str(client_id).isdigit(), f"client_id is not numeric: {client_id}"
+    verify_credential_config(cred_config, pool_id, provider_id)
 
-    with open(osp.join(terraform_module_dir, "terraform.tfvars"), "w") as fp:
-        fp.write(dedent(f"""
-                region    = "{aws_region}"
-                test_zone = "{test_zone_name}"
-
-                lb_subnet_ids      = {json.dumps(subnet_public_ids)}
-                backend_subnet_ids = {json.dumps(subnet_public_ids)}
-
-                google_project               = "{google_project}"
-                google_workspace_admin_email = "{admin_email}"
-                """))
-        if test_role_arn:
-            # Blank line first: terraform fmt aligns "=" per contiguous block, so
-            # appending onto the block above would make the file fail fmt -check.
-            fp.write(f'\nrole_arn = "{test_role_arn}"\n')
-
-    LOG.info("Testing Google WIF in GCP project: %s", google_project)
-
-    with terraform_apply(
-        terraform_module_dir,
-        destroy_after=not keep_after,
-        json_output=True,
-    ) as tf_output:
-        LOG.info("%s", json.dumps(tf_output, indent=4))
-
-        # Cloud-init writes the WIF files (cred config, wif.env, verify-wif.sh)
-        # onto the OpenVPN instances. On a re-apply the launch template changes
-        # and the ASG rolls instances; wait for that to settle before relying on
-        # the instances. On a first apply there is no refresh and this returns
-        # immediately.
-        autoscaling_client = boto3_session.client("autoscaling", region_name=aws_region)
-        wait_for_instance_refresh(
-            asg_name=tf_output["autoscaling_group_name"]["value"],
-            autoscaling_client=autoscaling_client,
-            timeout=1800,  # 30 minutes
-        )
-
-        sa_email = tf_output["google_directory_reader_sa_email"]["value"]
-        client_id = tf_output["google_directory_reader_client_id"]["value"]
-        cred_config = json.loads(
-            tf_output["google_wif_credential_config_json"]["value"]
-        )
-        pool_id = tf_output["wif_pool_id"]["value"]
-        provider_id = tf_output["wif_provider_id"]["value"]
-        sa_id = tf_output["wif_sa_id"]["value"]
-
-        # --- Output shape checks (cheap, no API calls) ----------------------
-        assert sa_email.startswith(f"{sa_id}@")
-        assert sa_email.endswith(".iam.gserviceaccount.com")
-        assert str(client_id).isdigit(), f"client_id is not numeric: {client_id}"
-        verify_credential_config(cred_config, pool_id, provider_id)
-
-        # --- Live GCP-side verification -------------------------------------
-        verify_service_account(iam, sa_email)
-        verify_no_user_managed_keys(iam, sa_email)
-        pool_name = verify_pool_and_provider(iam, cred_config["audience"])
-        verify_sa_iam_bindings(iam, sa_email, pool_name)
-
-        LOG.info("✅ Google WIF verified end-to-end")
+    # --- Live GCP-side verification -----------------------------------------
+    verify_service_account(iam, sa_email)
+    verify_no_user_managed_keys(iam, sa_email)
+    pool_name = verify_pool_and_provider(iam, cred_config["audience"])
+    verify_sa_iam_bindings(iam, sa_email, pool_name)
+    LOG.info("✅ Google WIF verified end-to-end")

@@ -15,9 +15,10 @@ TEST_REGION="us-west-2"
 TEST_ROLE="arn:aws:iam::303467602807:role/openvpn-tester"
 TEST_SELECTOR="aws6"
 
-# GCP project for the Google WIF test (the "OpenVPN" project, which also hosts
-# the portal OAuth client). Override: GOOGLE_PROJECT=my-project make test-google-wif
-# Get yours from gcloud projects list
+# GCP project the module test creates the WIF resources in (the "OpenVPN"
+# project, which also hosts the portal OAuth client). The test requires GCP ADC
+# (gcloud auth application-default login, or google-github-actions/auth in CI).
+# Override: GOOGLE_PROJECT=my-project make test-clean. From `gcloud projects list`.
 GOOGLE_PROJECT ?= openvpn-427715
 
 help: install-hooks
@@ -34,12 +35,12 @@ install-hooks:  ## Install repo hooks
 
 
 .PHONY: test
-test:  ## Run tests on the module
-	pytest -xvvs tests/
+test:  ## Run tests on the module (needs AWS + GCP credentials)
+	GOOGLE_PROJECT=$(GOOGLE_PROJECT) pytest -xvvs tests/
 
 .PHONY: test-keep
 test-keep:  ## Run a test and keep resources
-	pytest -xvvs \
+	GOOGLE_PROJECT=$(GOOGLE_PROJECT) pytest -xvvs \
 		--aws-region=${TEST_REGION} \
 		--test-role-arn=${TEST_ROLE} \
 		-k $(TEST_SELECTOR) \
@@ -48,28 +49,11 @@ test-keep:  ## Run a test and keep resources
 
 .PHONY: test-clean
 test-clean:  ## Run a test and destroy resources
-	pytest -xvvs \
+	GOOGLE_PROJECT=$(GOOGLE_PROJECT) pytest -xvvs \
 		--aws-region=${TEST_REGION} \
 		--test-role-arn=${TEST_ROLE} \
 		-k $(TEST_SELECTOR) \
 		tests/test_module.py 2>&1 | tee pytest-$(shell date +%Y%m%d-%H%M%S)-output.log
-
-# Run the Google WIF test. Args: $(1) = extra pytest flags (e.g. --keep-after)
-define run_google_wif_test
-	GOOGLE_PROJECT=$(GOOGLE_PROJECT) pytest -xvvs \
-		--aws-region=${TEST_REGION} \
-		--test-role-arn=${TEST_ROLE} \
-		$(1) \
-		tests/test_google_wif.py 2>&1 | tee pytest-$(shell date +%Y%m%d-%H%M%S)-output.log
-endef
-
-.PHONY: test-google-wif-keep
-test-google-wif-keep:  ## Run the Google WIF test and keep resources (needs GCP ADC; optional GOOGLE_PROJECT)
-	$(call run_google_wif_test,--keep-after)
-
-.PHONY: test-google-wif-clean
-test-google-wif-clean:  ## Run the Google WIF test and destroy resources (needs GCP ADC; optional GOOGLE_PROJECT)
-	$(call run_google_wif_test,)
 
 .PHONY: lint
 lint:  ## Check code style

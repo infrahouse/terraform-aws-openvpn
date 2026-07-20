@@ -21,6 +21,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       ROLE_ARN: "arn:aws:iam::303467602807:role/openvpn-tester"
       OPENVPN_CLIENT_SECRET: ${{ secrets.OPENVPN_CLIENT_SECRET }}
+      GOOGLE_PROJECT: "openvpn-427715"
 
     # Use the Bash shell regardless whether the GitHub Actions runner
     # is ubuntu-latest, macos-latest, or windows-latest
@@ -40,6 +41,16 @@ jobs:
           role-session-name: "terraform-ci"
           aws-region: "us-west-1"
           role-duration-seconds: 7200
+
+      # Keyless GCP auth via GitHub OIDC federation -- mirrors the AWS auth above.
+      # One-time GCP setup: scripts/setup-ci-gcp-auth.sh. Writes a credential file
+      # and sets GOOGLE_APPLICATION_CREDENTIALS, which both Terraform's google
+      # provider and the test's google-auth pick up as ADC.
+      - name: Configure GCP Credentials
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/145076599640/locations/global/workloadIdentityPools/github/providers/github-oidc"
+          service_account: "openvpn-tester@openvpn-427715.iam.gserviceaccount.com"
 
       # Install the latest version of Terraform CLI
       - name: Setup Terraform
