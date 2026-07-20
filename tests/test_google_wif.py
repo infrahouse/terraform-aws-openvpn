@@ -51,8 +51,16 @@ def _google_credentials():
     from google.auth import default as google_auth_default
     from google.auth.exceptions import DefaultCredentialsError
 
+    # Resolve the project up front so we can hand it to google.auth.default as
+    # the quota project. That is the project everything targets anyway, and
+    # supplying it is what silences google-auth's "no quota project" warning --
+    # no `gcloud set-quota-project` (which mutates global ADC state) required.
+    project = os.environ.get("GOOGLE_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+
     try:
-        credentials, adc_project = google_auth_default(scopes=[CLOUD_PLATFORM_SCOPE])
+        credentials, adc_project = google_auth_default(
+            scopes=[CLOUD_PLATFORM_SCOPE], quota_project_id=project
+        )
     except DefaultCredentialsError:
         pytest.skip(
             "No Google Application Default Credentials. Run "
@@ -60,18 +68,66 @@ def _google_credentials():
             "google-github-actions/auth in CI."
         )
 
-    project = (
-        os.environ.get("GOOGLE_PROJECT")
-        or os.environ.get("GOOGLE_CLOUD_PROJECT")
-        or adc_project
-    )
+    project = project or adc_project
     if not project:
         pytest.skip(
             "No GCP project resolved. Set GOOGLE_PROJECT (or configure a "
             "quota project on your ADC)."
         )
 
+    _verify_credentials_usable(credentials, project)
+
     return credentials, project
+
+
+def _verify_credentials_usable(credentials, project):
+    """
+    Prove the resolved credentials actually work before any infrastructure is
+    built.
+
+    Resolving ADC only proves credentials *exist*; it does not prove they can
+    still call an API. Expired reauth (RAPT) tokens resolve fine and then fail
+    at the first sensitive call, so without this check the run dies ~6 minutes
+    in -- after creating a hundred-plus AWS resources -- on an opaque
+    ``invalid_rapt``. Calling the same API Terraform hits first (serviceusage,
+    to enable the required APIs) surfaces that in about a second.
+
+    :param credentials: Google ADC credentials.
+    :param project: GCP project id the test runs against.
+    :raise Failed: if the credentials cannot call the serviceusage API.
+    """
+    from google.auth.exceptions import RefreshError
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+
+    try:
+        build(
+            "serviceusage", "v1", credentials=credentials, cache_discovery=False
+        ).services().list(
+            parent=f"projects/{project}", filter="state:ENABLED", pageSize=1
+        ).execute()
+    except RefreshError as error:
+        pytest.fail(
+            f"Google credentials resolved but cannot be refreshed: {error}\n"
+            "Reauth (RAPT) tokens expire periodically -- run "
+            "`gcloud auth application-default login` and retry."
+        )
+    except HttpError as error:
+        pytest.fail(
+            f"Google credentials work but cannot list services in {project}: {error}\n"
+            "The identity needs roles/serviceusage.serviceUsageAdmin (plus "
+            "iam.serviceAccountAdmin and iam.workloadIdentityPoolAdmin) in that project."
+        )
+
+    # The call above just succeeded, so any "quota project" warning google-auth
+    # printed is a false alarm: this test (and the google provider) target the
+    # project explicitly, so no ADC quota project is needed. Say so, next to the
+    # warning, to save the reader a `set-quota-project` detour.
+    LOG.info(
+        "✓ Google credentials verified against %s. Ignore any 'quota project' "
+        "warning above -- the project is passed explicitly, none is needed.",
+        project,
+    )
 
 
 def _iam_service(credentials):
@@ -250,9 +306,7 @@ def test_google_wif(
     # The unique per-environment suffix for the pool/provider/SA ids is owned by
     # Terraform (random_string in the test root), which avoids GCP's ~30-day
     # soft-delete id collisions. The concrete ids come back as outputs below.
-    admin_subject = os.environ.get(
-        "GOOGLE_DIRECTORY_ADMIN_SUBJECT", "aleks@infrahouse.com"
-    )
+    admin_email = os.environ.get("GOOGLE_WORKSPACE_ADMIN_EMAIL", "aleks@infrahouse.com")
 
     # Clean up any stale local state/lock from a previous run.
     check_call(
@@ -267,8 +321,8 @@ def test_google_wif(
                 lb_subnet_ids      = {json.dumps(subnet_public_ids)}
                 backend_subnet_ids = {json.dumps(subnet_public_ids)}
 
-                google_project                 = "{google_project}"
-                google_directory_admin_subject = "{admin_subject}"
+                google_project               = "{google_project}"
+                google_workspace_admin_email = "{admin_email}"
                 """))
         if test_role_arn:
             # Blank line first: terraform fmt aligns "=" per contiguous block, so

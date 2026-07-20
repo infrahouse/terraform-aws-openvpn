@@ -13,3 +13,8 @@ provider "aws" {
 
   }
 }
+
+# Required by the openvpn module even with the WIF feature off. Empty and
+# uncredentialed on purpose: enable_google_directory_revocation defaults to
+# false, so no google resource exists and this provider is never configured.
+provider "google" {}

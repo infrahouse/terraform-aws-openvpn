@@ -50,6 +50,7 @@ module "openvpn" {
   providers = {
     aws     = aws
     aws.dns = aws
+    google  = google
   }
   alarm_emails = [
     "test@example.com"
@@ -74,9 +75,10 @@ module "openvpn" {
     "tinyfish.io",
   ]
 
-  # Feature under test: keyless Google Workspace directory revocation.
+  # Feature under test: keyless Google Workspace directory revocation. A single
+  # bool flip; the module stands up the GCP side and drops the files itself.
   enable_google_directory_revocation = true
-  google_directory_admin_subject     = var.google_directory_admin_subject
+  google_workspace_admin_email       = var.google_workspace_admin_email
   google_wif_pool_id                 = "ovpn-wif-${local.suffix}"
   google_wif_provider_id             = "aws-ovpn-${local.suffix}"
   google_directory_reader_sa_id      = "ovpn-dir-${local.suffix}"

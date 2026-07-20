@@ -98,13 +98,17 @@ These have no default — you must set them.
 
 Optional. Lets the OpenVPN instance read Google Workspace user suspension status
 — via Workload Identity Federation, so **no service-account key is stored** — in
-order to revoke deactivated users' certificates. Disabled by default; when
-disabled no GCP resources are created and no `google` provider is required.
+order to revoke deactivated users' certificates. Enabled with a single flag.
+
+Because the module can create GCP resources, it requires a `google` provider
+(v7.0.0+). With the feature off (default) that provider may be an empty,
+uncredentialed block — it is never configured. See the
+[README upgrade note](https://github.com/infrahouse/terraform-aws-openvpn#upgrading-to-v700).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `enable_google_directory_revocation` | `false` | Enable the Workspace integration. Requires a `google` provider in the root module. |
-| `google_directory_admin_subject` | `null` | Email of a **real** Workspace admin the service account impersonates. Required when the feature is enabled. |
+| `enable_google_directory_revocation` | `false` | Turn the feature on. Creates the GCP resources, writes the files to the instances, and schedules the Puppet revocation sync. |
+| `google_workspace_admin_email` | `null` | Email of a **real** Workspace admin the VPN impersonates to read the directory. Required when the feature is on. |
 | `google_wif_pool_id` | `openvpn-wif-pool` | Workload identity pool ID. |
 | `google_wif_provider_id` | `aws-openvpn` | Workload identity pool *provider* ID. |
 | `google_directory_reader_sa_id` | `openvpn-dir-reader` | Account ID of the keyless directory-reader service account. |
