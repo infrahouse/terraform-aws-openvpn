@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.2.0] - 2026-07-20
+
+### Bug Fixes
+
+- Suppress CKV_GCP_125 false positive on the AWS WIF provider
+
+### Features
+
+- Keyless Google Workspace directory revocation via Workload Identity Federation
+
 ## [6.1.0] - 2026-07-03
 
 ## [6.0.0] - 2026-06-10
