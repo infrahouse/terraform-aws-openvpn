@@ -107,10 +107,15 @@ gcloud iam service-accounts add-iam-policy-binding "$SA" \
 
 if [ "$GRANT_TEST_ROLES" = "true" ]; then
   echo "==> Granting the roles test_google_wif needs..."
+  # serviceUsageConsumer (serviceusage.services.use) is required because the test
+  # passes a quota project to google.auth -- that adds an x-goog-user-project
+  # header, and *using* the project that way needs services.use, which
+  # serviceUsageAdmin does NOT include.
   for role in \
     roles/iam.serviceAccountAdmin \
     roles/iam.workloadIdentityPoolAdmin \
-    roles/serviceusage.serviceUsageAdmin; do
+    roles/serviceusage.serviceUsageAdmin \
+    roles/serviceusage.serviceUsageConsumer; do
     gcloud projects add-iam-policy-binding "$PROJECT" \
       --member="serviceAccount:${SA}" \
       --role="$role" \

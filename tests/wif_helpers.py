@@ -107,8 +107,9 @@ def _verify_credentials_usable(credentials, project):
     except HttpError as error:
         pytest.fail(
             f"Google credentials work but cannot list services in {project}: {error}\n"
-            "The identity needs roles/serviceusage.serviceUsageAdmin (plus "
-            "iam.serviceAccountAdmin and iam.workloadIdentityPoolAdmin) in that project."
+            "The identity needs, in that project: serviceusage.serviceUsageAdmin, "
+            "serviceusage.serviceUsageConsumer, iam.serviceAccountAdmin, and "
+            "iam.workloadIdentityPoolAdmin (see scripts/setup-ci-gcp-auth.sh)."
         )
 
     # The call above just succeeded, so any "quota project" warning google-auth
