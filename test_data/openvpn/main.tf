@@ -7,6 +7,7 @@ module "openvpn" {
   providers = {
     aws     = aws
     aws.dns = aws
+    google  = google
   }
   alarm_emails = [
     "test@example.com"

@@ -11,12 +11,14 @@
 #
 # The ONE thing Terraform cannot do (no resource exists in hashicorp/google):
 #   authorize this SA's client ID for the directory scope in the Workspace
-#   Admin console (Security -> API controls -> Domain-wide delegation).
-#   The client ID + scope to paste are emitted as outputs below.
+#   Admin console (https://admin.google.com/ac/owl/domainwidedelegation).
+#   The client ID + scope to paste are emitted as outputs below, and
+#   verify-wif.sh prints them on the instance.
 #
 # Everything here is gated on var.enable_google_directory_revocation (default
-# false), so existing consumers of the module are unaffected and never need a
-# google provider.
+# false). When false, no GCP resources are created. Consumers must still declare
+# a `google` provider block, but it can be empty and uncredentialed -- with the
+# feature off nothing references it, so it is never configured or contacted.
 # ============================================================================
 
 locals {
@@ -41,6 +43,12 @@ locals {
     local.instance_assumed_role_arn,
   ) : null
 
+  # Everything lives under /opt/openvpn-wif, NOT /etc/openvpn: the OpenVPN role
+  # (Puppet + the openvpn package) actively manages /etc/openvpn and reaps files
+  # it does not declare, which silently deleted wif.env when it lived there.
+  wif_dir             = "/opt/openvpn-wif"
+  wif_credential_path = "${local.wif_dir}/google-wif.json"
+
   # The keyless credential-configuration the instance points
   # GOOGLE_APPLICATION_CREDENTIALS at. Contains NO secret -- only IDs and the
   # AWS IMDS URLs. Equivalent to `gcloud iam workload-identity-pools
@@ -61,24 +69,17 @@ locals {
     }
   }) : null
 
-  # Config the instance needs to actually USE the federation, plus the
-  # self-verifying diagnostic. cloud-init writes these (see extra_files in
-  # asg.tf) so nothing has to be copied by hand and the verify script reads its
-  # inputs from wif.env instead of asking an operator. Empty list when disabled.
-  # Everything lives under /opt/openvpn-wif, NOT /etc/openvpn: the OpenVPN role
-  # (Puppet + the openvpn package) actively manages /etc/openvpn and reaps files
-  # it does not declare, which silently deleted wif.env when it lived there.
-  wif_dir             = "/opt/openvpn-wif"
-  wif_credential_path = "${local.wif_dir}/google-wif.json"
-
-  wif_env_file = templatefile("${path.module}/templates/wif.env.tftpl", {
+  wif_env_file = local.google_revocation_enabled ? templatefile("${path.module}/templates/wif.env.tftpl", {
     credential_path   = local.wif_credential_path
-    sa_email          = local.google_revocation_enabled ? google_service_account.dir_reader[0].email : ""
-    sa_client_id      = local.google_revocation_enabled ? google_service_account.dir_reader[0].unique_id : ""
+    sa_email          = google_service_account.dir_reader[0].email
+    sa_client_id      = google_service_account.dir_reader[0].unique_id
     expected_role_arn = local.instance_assumed_role_arn
-    admin_subject     = var.google_directory_admin_subject == null ? "" : var.google_directory_admin_subject
-  })
+    admin_subject     = var.google_workspace_admin_email == null ? "" : var.google_workspace_admin_email
+  }) : ""
 
+  # Files the instance needs to use the federation, plus the self-verifying
+  # diagnostic. Wired into cloud-init via extra_files in asg.tf; empty when the
+  # feature is disabled so no google outputs are referenced.
   wif_extra_files = local.google_revocation_enabled ? [
     {
       path        = local.wif_credential_path
@@ -188,31 +189,36 @@ resource "google_service_account_iam_member" "wif_token_creator" {
 variable "enable_google_directory_revocation" {
   description = <<-EOT
     Enable the Google Workspace integration that lets the OpenVPN instance
-    revoke certificates for deactivated (suspended/deleted) directory users.
+    revoke certificates for deactivated (suspended/deleted) directory users,
+    keylessly via Workload Identity Federation.
 
-    When true, the root module MUST configure a `google` provider (project,
-    region, and credentials -- e.g. ADC). When false (default), no GCP
-    resources are created and no google provider is needed.
+    When true, the root module MUST configure a `google` provider (project +
+    credentials, e.g. ADC) and set `google_workspace_admin_email`. When false
+    (default), no GCP resources are created; a `google` provider block must
+    still be declared but may be empty and uncredentialed -- nothing references
+    it, so it is never configured.
   EOT
   type        = bool
   default     = false
 }
 
-variable "google_directory_admin_subject" {
+variable "google_workspace_admin_email" {
   description = <<-EOT
-    Email of a real Workspace admin the SA impersonates (domain-wide delegation
-    "subject") to read the directory. Required when
-    enable_google_directory_revocation = true. Surfaced to the instance so the
-    revocation job knows whom to act as; not used to create any GCP resource.
+    Email of a Google Workspace admin the VPN impersonates to read who has been
+    deactivated (the domain-wide-delegation "subject"). Must be a real, active
+    Workspace user with permission to read the directory -- a non-existent
+    address fails at runtime with `invalid_grant: Invalid email or User ID`.
+
+    Required when enable_google_directory_revocation = true.
   EOT
   type        = string
   default     = null
 
   validation {
     condition = !var.enable_google_directory_revocation || (
-      var.google_directory_admin_subject != null && var.google_directory_admin_subject != ""
+      var.google_workspace_admin_email != null && var.google_workspace_admin_email != ""
     )
-    error_message = "google_directory_admin_subject must be set when enable_google_directory_revocation is true."
+    error_message = "google_workspace_admin_email must be set when enable_google_directory_revocation is true."
   }
 }
 
@@ -245,18 +251,18 @@ output "google_directory_reader_sa_email" {
 output "google_directory_reader_client_id" {
   description = <<-EOT
     Numeric OAuth2 client ID of the directory-reader SA. Paste this into the
-    Workspace Admin console (Security -> API controls -> Domain-wide delegation)
+    Workspace Admin console (https://admin.google.com/ac/owl/domainwidedelegation)
     together with scope https://www.googleapis.com/auth/admin.directory.user.readonly.
-    This is the one step Terraform cannot perform.
+    This is the one step Terraform cannot perform; verify-wif.sh prints it on the
+    instance too. Null when the feature is disabled.
   EOT
   value       = one(google_service_account.dir_reader[*].unique_id)
 }
 
 output "google_wif_credential_config_json" {
   description = <<-EOT
-    Keyless external-account credential config. Write this to the instance and
-    point GOOGLE_APPLICATION_CREDENTIALS at it. Contains no secret (only IDs +
-    IMDS URLs), so it is safe to bake into userdata / an AMI / Puppet.
+    Keyless external-account credential config written to the instance. Contains
+    no secret (only IDs + IMDS URLs). Null when the feature is disabled.
   EOT
   value       = local.wif_credential_config
 }

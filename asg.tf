@@ -1,7 +1,8 @@
 
 module "userdata" {
-  source                   = "registry.infrahouse.com/infrahouse/cloud-init/aws"
-  version                  = "2.4.0"
+  source  = "registry.infrahouse.com/infrahouse/cloud-init/aws"
+  version = "2.4.0"
+
   environment              = var.environment
   role                     = "openvpn_server"
   puppet_debug_logging     = var.puppet_debug_logging
@@ -22,6 +23,7 @@ module "userdata" {
     ]
   )
   gzip_userdata = var.gzip_userdata
+
   # WIF files (cred config, wif.env, verify-wif.sh) are appended only when
   # enable_google_directory_revocation is true; otherwise wif_extra_files is [].
   extra_files = concat(var.extra_files, local.wif_extra_files)

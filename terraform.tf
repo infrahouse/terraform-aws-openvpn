@@ -18,10 +18,9 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
-    # Only used when var.enable_google_directory_revocation = true. The root
-    # module must configure a `google` provider (project + region + auth) when
-    # the feature is on; when off, no google resources are created and the
-    # provider is never contacted.
+    # Used only when enable_google_directory_revocation = true. When the feature
+    # is off, no google resources exist, so the consumer's `provider "google"`
+    # block may be empty and uncredentialed -- it is never configured.
     google = {
       source  = "hashicorp/google"
       version = "~> 6.0"

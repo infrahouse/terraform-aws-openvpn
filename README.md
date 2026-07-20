@@ -398,16 +398,26 @@ EC2 instance role -> GCP STS (federation) -> directory-reader service account
 
 ### Step 1: Enable the feature
 
-The root module must configure a `google` provider (project + credentials, e.g.
-ADC). When the feature is disabled (the default) no GCP resources are created
-and no google provider is needed.
+It's a single flag. Because the module can then create GCP resources, it
+requires a `google` provider — so **every** consumer of the module (v7.0.0+)
+must declare one. If you don't use this feature, an empty block is enough and it
+is never configured (see [Upgrading](#upgrading-to-v700)):
 
 ```hcl
+provider "google" {
+  project = "my-gcp-project"   # authenticates via ADC
+}
+
 module "openvpn" {
   source = "registry.infrahouse.com/infrahouse/openvpn/aws"
+  providers = {
+    aws     = aws
+    aws.dns = aws
+    google  = google
+  }
   # ...
   enable_google_directory_revocation = true
-  google_directory_admin_subject     = "admin@example.com" # a REAL Workspace admin
+  google_workspace_admin_email       = "admin@example.com" # a REAL Workspace admin
 }
 ```
 
@@ -498,6 +508,30 @@ modifies anything. It requires `google-auth >= 2` and
 and `impersonated_credentials`). It runs on the infrahouse-toolkit embedded
 interpreter (`/opt/infrahouse-toolkit/embedded/bin/python3`) when present,
 otherwise system `python3`; override with `WIF_PYTHON`.
+
+### Upgrading to v7.0.0
+
+v7.0.0 added the `google` provider to the module's requirements, so **every**
+consumer — even those not using this feature — must declare a `google` provider
+and pass it in the `providers` map:
+
+```hcl
+provider "google" {}   # empty is fine when the feature is off
+
+module "openvpn" {
+  # ...
+  providers = {
+    aws     = aws
+    aws.dns = aws
+    google  = google   # <-- add this
+  }
+}
+```
+
+With `enable_google_directory_revocation` off (the default) no google resource
+is created, so the provider is **never configured** — the empty block needs no
+project and no credentials. Only when you turn the feature on do you configure it
+(`provider "google" { project = "…" }`) and set `google_workspace_admin_email`.
 
 ## Logging and Compliance
 
@@ -1433,8 +1467,12 @@ requires GCP credentials. If no Google credentials are available, the test is
    ever stored:
    ```shell
    gcloud auth application-default login
-   gcloud auth application-default set-quota-project openvpn-427715
    ```
+   You do **not** need `gcloud auth application-default set-quota-project`: the
+   test and the `google` provider both pass the project explicitly (via
+   `GOOGLE_PROJECT`), so the "quota project" warning google-auth prints is
+   harmless and can be ignored. The test logs a reminder to that effect after it
+   verifies the credentials work.
 
 3. **GCP permissions.** Your identity needs, in the target project, roughly:
    - `roles/iam.serviceAccountAdmin`
@@ -1765,17 +1803,17 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | <a name="input_efs_backup_retention_days"></a> [efs\_backup\_retention\_days](#input\_efs\_backup\_retention\_days) | Number of days to retain EFS backups. Default: 365 days (matches log retention for compliance). | `number` | `365` | no |
 | <a name="input_efs_backup_schedule"></a> [efs\_backup\_schedule](#input\_efs\_backup\_schedule) | Cron expression for EFS backup schedule. Default: daily at 2 AM UTC (cron(0 2 * * ? *)). | `string` | `"cron(0 2 * * ? *)"` | no |
 | <a name="input_enable_efs_backup"></a> [enable\_efs\_backup](#input\_enable\_efs\_backup) | Enable AWS Backup for EFS file system containing OpenVPN configuration and certificates. | `bool` | `true` | no |
-| <a name="input_enable_google_directory_revocation"></a> [enable\_google\_directory\_revocation](#input\_enable\_google\_directory\_revocation) | Enable the Google Workspace integration that lets the OpenVPN instance<br/>revoke certificates for deactivated (suspended/deleted) directory users.<br/><br/>When true, the root module MUST configure a `google` provider (project,<br/>region, and credentials -- e.g. ADC). When false (default), no GCP<br/>resources are created and no google provider is needed. | `bool` | `false` | no |
+| <a name="input_enable_google_directory_revocation"></a> [enable\_google\_directory\_revocation](#input\_enable\_google\_directory\_revocation) | Enable the Google Workspace integration that lets the OpenVPN instance<br/>revoke certificates for deactivated (suspended/deleted) directory users,<br/>keylessly via Workload Identity Federation.<br/><br/>When true, the root module MUST configure a `google` provider (project +<br/>credentials, e.g. ADC) and set `google_workspace_admin_email`. When false<br/>(default), no GCP resources are created; a `google` provider block must<br/>still be declared but may be empty and uncredentialed -- nothing references<br/>it, so it is never configured. | `bool` | `false` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Name of environment. | `string` | `"development"` | no |
 | <a name="input_extra_files"></a> [extra\_files](#input\_extra\_files) | Additional files to create on an instance. | <pre>list(<br/>    object(<br/>      {<br/>        content     = string<br/>        path        = string<br/>        permissions = string<br/>      }<br/>    )<br/>  )</pre> | `[]` | no |
 | <a name="input_extra_instance_profile_permissions"></a> [extra\_instance\_profile\_permissions](#input\_extra\_instance\_profile\_permissions) | A JSON with a permissions policy document. The policy will be attached to the ASG instance profile. | `string` | `null` | no |
 | <a name="input_extra_policies"></a> [extra\_policies](#input\_extra\_policies) | A map of additional policy ARNs to attach to the jumphost role | `map(string)` | `{}` | no |
 | <a name="input_extra_repos"></a> [extra\_repos](#input\_extra\_repos) | Additional APT repositories to configure on an instance. | <pre>map(<br/>    object(<br/>      {<br/>        source    = string<br/>        key       = optional(string)<br/>        keyid     = optional(string)<br/>        keyserver = optional(string)<br/>        machine   = optional(string)<br/>        authFrom  = optional(string)<br/>        priority  = optional(number)<br/>      }<br/>    )<br/>  )</pre> | `{}` | no |
-| <a name="input_google_directory_admin_subject"></a> [google\_directory\_admin\_subject](#input\_google\_directory\_admin\_subject) | Email of a real Workspace admin the SA impersonates (domain-wide delegation<br/>"subject") to read the directory. Required when<br/>enable\_google\_directory\_revocation = true. Surfaced to the instance so the<br/>revocation job knows whom to act as; not used to create any GCP resource. | `string` | `null` | no |
 | <a name="input_google_directory_reader_sa_id"></a> [google\_directory\_reader\_sa\_id](#input\_google\_directory\_reader\_sa\_id) | account\_id (local part) of the keyless directory-reader service account. | `string` | `"openvpn-dir-reader"` | no |
 | <a name="input_google_oauth_client_writer"></a> [google\_oauth\_client\_writer](#input\_google\_oauth\_client\_writer) | ARN of an IAM role that can update content of google\_oauth\_client secret | `string` | n/a | yes |
 | <a name="input_google_wif_pool_id"></a> [google\_wif\_pool\_id](#input\_google\_wif\_pool\_id) | Workload Identity Pool ID for the OpenVPN AWS federation. | `string` | `"openvpn-wif-pool"` | no |
 | <a name="input_google_wif_provider_id"></a> [google\_wif\_provider\_id](#input\_google\_wif\_provider\_id) | Workload Identity Pool *provider* ID for the AWS provider. | `string` | `"aws-openvpn"` | no |
+| <a name="input_google_workspace_admin_email"></a> [google\_workspace\_admin\_email](#input\_google\_workspace\_admin\_email) | Email of a Google Workspace admin the VPN impersonates to read who has been<br/>deactivated (the domain-wide-delegation "subject"). Must be a real, active<br/>Workspace user with permission to read the directory -- a non-existent<br/>address fails at runtime with `invalid_grant: Invalid email or User ID`.<br/><br/>Required when enable\_google\_directory\_revocation = true. | `string` | `null` | no |
 | <a name="input_gzip_userdata"></a> [gzip\_userdata](#input\_gzip\_userdata) | Whether to gzip compress the cloud-init userdata before base64 encoding.<br/><br/>When true, the userdata is gzip-compressed, significantly reducing its size.<br/>This is important because AWS limits EC2 userdata to 16 KB.<br/><br/>The OpenVPN module's userdata can exceed this limit when extra\_repos includes<br/>embedded GPG keys (~3-6 KB each), multiple SSH users, or extensive custom\_facts.<br/><br/>Default: true (recommended to avoid hitting the 16 KB limit) | `bool` | `true` | no |
 | <a name="input_instance_type"></a> [instance\_type](#input\_instance\_type) | EC2 instance type for OpenVPN server instances.<br/><br/>Recommendation: c6in family (compute-optimized, network-optimized)<br/><br/>Why compute-optimized for VPN?<br/>- OpenVPN encryption/decryption is CPU-intensive<br/>- C-series instances provide better performance per dollar for VPN workloads<br/>- Higher single-thread performance benefits VPN connection handling<br/><br/>Recommended instance types:<br/>- c6in.large (DEFAULT): 2 vCPU, 4 GB RAM, 25 Gbps network - Best balance for production<br/>- c6in.xlarge: 4 vCPU, 8 GB RAM, 30 Gbps network - High user count (>100 concurrent)<br/>- c6in.2xlarge: 8 vCPU, 16 GB RAM, 40 Gbps network - Very high throughput needs<br/>- t3a.small: 2 vCPU, 2 GB RAM, 5 Gbps network - Development/testing only<br/><br/>Instance type impacts autoscaling:<br/>- var.autoscaling\_target\_network\_percentage uses the instance's baseline network bandwidth<br/>- Larger instances = higher network bandwidth threshold for autoscaling<br/>- Example: c6in.large (25 Gbps) @ 60% = scales at 15 Gbps<br/>- Example: c6in.xlarge (30 Gbps) @ 60% = scales at 18 Gbps<br/><br/>Cost comparison (us-east-1, on-demand):<br/>- c6in.large: ~$82/month (RECOMMENDED)<br/>- m6in.large: ~$102/month (general-purpose, 19% more expensive)<br/>- t3a.small: ~$15/month (testing only, limited network performance)<br/><br/>Network performance:<br/>- c6in family: 25-200 Gbps (network-optimized)<br/>- m6in family: 25-200 Gbps (network-optimized)<br/>- m7i family: Up to 12.5 Gbps (general-purpose)<br/>- t3/t3a family: Up to 5 Gbps (burstable)<br/><br/>When to use different instance families:<br/>- c6in: Best for production VPN (CPU + network optimized)<br/>- m6in/m7i: If you need more RAM for additional services<br/>- t3/t3a: Development, testing, or very low user count (<10 users)<br/><br/>Default: "c6in.large" | `string` | `"c6in.large"` | no |
 | <a name="input_key_pair_name"></a> [key\_pair\_name](#input\_key\_pair\_name) | SSH keypair name for accessing OpenVPN server instances.<br/><br/>⚠️  SECURITY WARNING:<br/>- SSH access should be limited to emergency troubleshooting only<br/>- Use AWS Systems Manager Session Manager for routine access instead<br/>- Restrict security group to allow SSH only from trusted IP ranges<br/>- Consider using short-lived SSH certificates instead of long-lived keys<br/>- Rotate SSH keys regularly<br/>- Monitor SSH access via CloudWatch and VPC Flow Logs<br/><br/>The key pair must exist in AWS before applying this module.<br/><br/>If not specified (null), the module will generate a temporary key pair.<br/>However, for production use, you should provide a managed key pair.<br/><br/>Example: "my-openvpn-emergency-key"<br/><br/>Default: null (module generates a temporary key) | `string` | `null` | no |
@@ -1814,9 +1852,9 @@ https://github.com/infrahouse/terraform-aws-openvpn/actions
 | <a name="output_efs_file_system_id"></a> [efs\_file\_system\_id](#output\_efs\_file\_system\_id) | ID of the EFS file system used for storing OpenVPN configuration and certificates |
 | <a name="output_efs_security_group_id"></a> [efs\_security\_group\_id](#output\_efs\_security\_group\_id) | ID of the security group attached to the EFS file system for OpenVPN configuration storage |
 | <a name="output_google_client_secret"></a> [google\_client\_secret](#output\_google\_client\_secret) | Google OAuth client secret name. The OpenVPN portal admin must update the secret with a Google OAuth client JSON. |
-| <a name="output_google_directory_reader_client_id"></a> [google\_directory\_reader\_client\_id](#output\_google\_directory\_reader\_client\_id) | Numeric OAuth2 client ID of the directory-reader SA. Paste this into the<br/>Workspace Admin console (Security -> API controls -> Domain-wide delegation)<br/>together with scope https://www.googleapis.com/auth/admin.directory.user.readonly.<br/>This is the one step Terraform cannot perform. |
+| <a name="output_google_directory_reader_client_id"></a> [google\_directory\_reader\_client\_id](#output\_google\_directory\_reader\_client\_id) | Numeric OAuth2 client ID of the directory-reader SA. Paste this into the<br/>Workspace Admin console (https://admin.google.com/ac/owl/domainwidedelegation)<br/>together with scope https://www.googleapis.com/auth/admin.directory.user.readonly.<br/>This is the one step Terraform cannot perform; verify-wif.sh prints it on the<br/>instance too. Null when the feature is disabled. |
 | <a name="output_google_directory_reader_sa_email"></a> [google\_directory\_reader\_sa\_email](#output\_google\_directory\_reader\_sa\_email) | Email of the keyless directory-reader service account (null when the feature is disabled). |
-| <a name="output_google_wif_credential_config_json"></a> [google\_wif\_credential\_config\_json](#output\_google\_wif\_credential\_config\_json) | Keyless external-account credential config. Write this to the instance and<br/>point GOOGLE\_APPLICATION\_CREDENTIALS at it. Contains no secret (only IDs +<br/>IMDS URLs), so it is safe to bake into userdata / an AMI / Puppet. |
+| <a name="output_google_wif_credential_config_json"></a> [google\_wif\_credential\_config\_json](#output\_google\_wif\_credential\_config\_json) | Keyless external-account credential config written to the instance. Contains<br/>no secret (only IDs + IMDS URLs). Null when the feature is disabled. |
 | <a name="output_launch_template_id"></a> [launch\_template\_id](#output\_launch\_template\_id) | ID of the EC2 launch template used by the OpenVPN Auto Scaling Group |
 | <a name="output_launch_template_latest_version"></a> [launch\_template\_latest\_version](#output\_launch\_template\_latest\_version) | Latest version number of the OpenVPN launch template |
 | <a name="output_load_balancer_arn"></a> [load\_balancer\_arn](#output\_load\_balancer\_arn) | ARN of the load balancer for the OpenVPN portal |

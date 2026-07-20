@@ -718,3 +718,6 @@ variable "efs_backup_retention_days" {
     error_message = "The efs_backup_retention_days must be at least 1 day."
   }
 }
+
+# enable_google_directory_revocation and the other google_* variables live in
+# google-wif.tf, next to the resources they drive.
