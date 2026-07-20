@@ -3,6 +3,10 @@ checkov ~= 3.2
 infrahouse-core ~= 1.1
 pytest-infrahouse ~= 0.24
 
+# Google WIF test (tests/test_google_wif.py) -- verifies the GCP side via ADC
+google-api-python-client ~= 2.198
+google-auth ~= 2.56
+
 
 # Documentation dependencies
 diagrams ~= 0.25

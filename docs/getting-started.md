@@ -41,7 +41,7 @@ data "aws_route53_zone" "this" {
 
 module "openvpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "5.3.0"
+  version = "6.1.0"
   providers = {
     aws     = aws
     aws.dns = aws.dns

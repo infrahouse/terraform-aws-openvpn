@@ -37,6 +37,7 @@ tf.plan
 __pycache__
 .pytest_cache
 pytest-*-output.log
+.docker
 
 # Claude Code local settings
 .claude/plans/*.local.md

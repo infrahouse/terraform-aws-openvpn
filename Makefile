@@ -15,6 +15,11 @@ TEST_REGION="us-west-2"
 TEST_ROLE="arn:aws:iam::303467602807:role/openvpn-tester"
 TEST_SELECTOR="aws6"
 
+# GCP project for the Google WIF test (the "OpenVPN" project, which also hosts
+# the portal OAuth client). Override: GOOGLE_PROJECT=my-project make test-google-wif
+# Get yours from gcloud projects list
+GOOGLE_PROJECT ?= openvpn-427715
+
 help: install-hooks
 	@python -c "$$PRINT_HELP_PYSCRIPT" < Makefile
 
@@ -49,6 +54,23 @@ test-clean:  ## Run a test and destroy resources
 		-k $(TEST_SELECTOR) \
 		tests/test_module.py 2>&1 | tee pytest-$(shell date +%Y%m%d-%H%M%S)-output.log
 
+# Run the Google WIF test. Args: $(1) = extra pytest flags (e.g. --keep-after)
+define run_google_wif_test
+	GOOGLE_PROJECT=$(GOOGLE_PROJECT) pytest -xvvs \
+		--aws-region=${TEST_REGION} \
+		--test-role-arn=${TEST_ROLE} \
+		$(1) \
+		tests/test_google_wif.py 2>&1 | tee pytest-$(shell date +%Y%m%d-%H%M%S)-output.log
+endef
+
+.PHONY: test-google-wif-keep
+test-google-wif-keep:  ## Run the Google WIF test and keep resources (needs GCP ADC; optional GOOGLE_PROJECT)
+	$(call run_google_wif_test,--keep-after)
+
+.PHONY: test-google-wif-clean
+test-google-wif-clean:  ## Run the Google WIF test and destroy resources (needs GCP ADC; optional GOOGLE_PROJECT)
+	$(call run_google_wif_test,)
+
 .PHONY: lint
 lint:  ## Check code style
 	yamllint \
@@ -57,8 +79,8 @@ lint:  ## Check code style
 
 .PHONY: bootstrap
 bootstrap: install-hooks ## bootstrap the development environment
-	pip install -U "pip ~= 25.2"
-	pip install -U "setuptools ~= 80.9"
+	pip install -U "pip ~= 26.1"
+	pip install -U "setuptools ~= 83.0"
 	pip install -r requirements.txt
 
 .PHONY: clean

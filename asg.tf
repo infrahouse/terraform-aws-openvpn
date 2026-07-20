@@ -22,8 +22,10 @@ module "userdata" {
     ]
   )
   gzip_userdata = var.gzip_userdata
-  extra_files   = var.extra_files
-  extra_repos   = var.extra_repos
+  # WIF files (cred config, wif.env, verify-wif.sh) are appended only when
+  # enable_google_directory_revocation is true; otherwise wif_extra_files is [].
+  extra_files = concat(var.extra_files, local.wif_extra_files)
+  extra_repos = var.extra_repos
 
   custom_facts = merge(
     var.puppet_custom_facts,
@@ -34,6 +36,12 @@ module "userdata" {
         routes : var.routes
         cloudwatch_log_group : aws_cloudwatch_log_group.openvpn.name
         cloudwatch_namespace : var.cloudwatch_namespace
+        # Lets Puppet decide at compile time whether to schedule the Google
+        # user-revocation sync at all, instead of installing a cron on every
+        # OpenVPN node and having it discover at runtime that the feature was
+        # never enabled. Absent on instances built by a module version that
+        # predates the feature, which Puppet treats as false.
+        google_directory_revocation : var.enable_google_directory_revocation
       }
     },
     {
