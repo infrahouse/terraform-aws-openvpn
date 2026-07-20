@@ -1471,8 +1471,12 @@ GCP credentials are missing — there is no AWS-only path anymore.
 
 3. **GCP permissions.** Your identity needs, in the target project:
    - `roles/iam.serviceAccountAdmin`
+   - `roles/iam.serviceAccountKeyAdmin` (the test lists SA keys to assert it is keyless)
    - `roles/iam.workloadIdentityPoolAdmin`
    - `roles/serviceusage.serviceUsageAdmin` (to enable the required APIs)
+
+   The project must also have `cloudresourcemanager.googleapis.com` enabled (the
+   google provider needs it to manage `google_project_service`).
 
 4. **Python dependencies** (installed by `make bootstrap`):
    `google-api-python-client`, `google-auth`.
