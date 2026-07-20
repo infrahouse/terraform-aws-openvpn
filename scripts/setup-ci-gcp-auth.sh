@@ -61,8 +61,11 @@ echo "Project number:  $PROJECT_NUMBER"
 echo
 
 echo "==> Enabling required APIs..."
+# cloudresourcemanager is needed by the terraform google provider to read/manage
+# google_project_service (the destroy phase fails without it).
 gcloud services enable \
   iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com \
+  cloudresourcemanager.googleapis.com \
   --project="$PROJECT"
 
 echo "==> Service account..."
@@ -107,8 +110,11 @@ gcloud iam service-accounts add-iam-policy-binding "$SA" \
 
 if [ "$GRANT_TEST_ROLES" = "true" ]; then
   echo "==> Granting the roles the test needs..."
+  # serviceAccountKeyAdmin: the test lists the SA's keys to assert it is keyless;
+  # serviceAccountAdmin does NOT include iam.serviceAccountKeys.list.
   for role in \
     roles/iam.serviceAccountAdmin \
+    roles/iam.serviceAccountKeyAdmin \
     roles/iam.workloadIdentityPoolAdmin \
     roles/serviceusage.serviceUsageAdmin; do
     gcloud projects add-iam-policy-binding "$PROJECT" \
