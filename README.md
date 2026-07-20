@@ -1473,7 +1473,6 @@ GCP credentials are missing — there is no AWS-only path anymore.
    - `roles/iam.serviceAccountAdmin`
    - `roles/iam.workloadIdentityPoolAdmin`
    - `roles/serviceusage.serviceUsageAdmin` (to enable the required APIs)
-   - `roles/serviceusage.serviceUsageConsumer` (the test passes a quota project)
 
 4. **Python dependencies** (installed by `make bootstrap`):
    `google-api-python-client`, `google-auth`.
