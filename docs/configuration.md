@@ -94,6 +94,52 @@ These have no default — you must set them.
 | `gzip_userdata` | `true` | Gzip user data to stay under the EC2 16 KB limit. |
 | `puppet_*` | varies | Puppet runtime settings (manifest, module path, hiera config, etc.). |
 
+## Google directory revocation (keyless WIF)
+
+Optional. Lets the OpenVPN instance read Google Workspace user suspension status
+— via Workload Identity Federation, so **no service-account key is stored** — in
+order to revoke deactivated users' certificates. Disabled by default; when
+disabled no GCP resources are created and no `google` provider is required.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `enable_google_directory_revocation` | `false` | Enable the Workspace integration. Requires a `google` provider in the root module. |
+| `google_directory_admin_subject` | `null` | Email of a **real** Workspace admin the service account impersonates. Required when the feature is enabled. |
+| `google_wif_pool_id` | `openvpn-wif-pool` | Workload identity pool ID. |
+| `google_wif_provider_id` | `aws-openvpn` | Workload identity pool *provider* ID. |
+| `google_directory_reader_sa_id` | `openvpn-dir-reader` | Account ID of the keyless directory-reader service account. |
+
+### Required manual step: domain-wide delegation
+
+Terraform creates everything except one thing — there is no resource in
+`hashicorp/google` to authorize the service account for the directory scope.
+A Workspace **super admin** must do this once:
+
+1. Open <https://admin.google.com/ac/owl/domainwidedelegation>
+   (menu path: Security → Access and data control → API controls →
+   Manage Domain-Wide Delegation).
+2. Click **Add new** and enter:
+    - **Client ID** — the service account's numeric OAuth client ID
+      (`google_directory_reader_client_id` output).
+    - **OAuth scopes** — `https://www.googleapis.com/auth/admin.directory.user.readonly`
+3. Click **Authorize**.
+
+Running `sudo /opt/openvpn-wif/verify-wif.sh` on any OpenVPN instance prints
+these exact values (read from `/opt/openvpn-wif/wif.env`) and then verifies the
+whole federation chain. Authorization takes a few minutes to propagate, so an
+`unauthorized_client` error right after authorizing is expected — re-run the
+script. See the
+[README](https://github.com/infrahouse/terraform-aws-openvpn#google-directory-revocation-keyless-wif)
+for the full walkthrough.
+
+### Related outputs
+
+| Output | Description |
+|--------|-------------|
+| `google_directory_reader_sa_email` | Email of the keyless directory-reader service account. |
+| `google_directory_reader_client_id` | Numeric OAuth client ID to paste into domain-wide delegation. |
+| `google_wif_credential_config_json` | Keyless external-account credential config (contains no secret). |
+
 ## Outputs
 
 | Output | Description |

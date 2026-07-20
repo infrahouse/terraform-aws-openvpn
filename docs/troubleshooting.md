@@ -76,6 +76,22 @@ the replacement itself.
 - Confirm the instance mounted EFS (`efs_dns_name` / `efs_file_system_id` outputs).
 - If EFS itself was recreated, restore from AWS Backup (enabled by default).
 
+## Google directory revocation (WIF) fails
+
+Run `sudo /opt/openvpn-wif/verify-wif.sh` on an OpenVPN instance. It tests the
+chain one link at a time, so the first failing tier tells you where to look.
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| Tier 1 fails, or the ARN does not match | The instance is not using the role the WIF provider is locked to. Compare with the provider's `attribute_condition`. |
+| Tier 2 fails | Federation rejected — usually the AWS role ARN does not match the attribute condition, or the pool/provider is not `ACTIVE`. |
+| Tier 3 fails | The `workloadIdentityUser` / `serviceAccountTokenCreator` bindings on the service account are missing. |
+| Tier 4: `unauthorized_client` | The subject is valid, but the SA's client ID is not authorized for the scope. Complete [domain-wide delegation](configuration.md#required-manual-step-domain-wide-delegation). Just authorized it? Wait a few minutes and re-run — propagation is not instant. |
+| Tier 4: `invalid_grant: Invalid email or User ID` | Google cannot find the subject: `google_directory_admin_subject` is not a real, active user in that Workspace. |
+| `google-auth is installed but too old` | The distro `python3-google-auth` (1.5.x) lacks `external_account` and `impersonated_credentials`. Install `google-auth >= 2` and `google-api-python-client`. |
+
+The script is read-only — it never installs or changes anything.
+
 ## Getting help
 
 - Review the [Architecture](architecture.md) page to understand the data flow.
