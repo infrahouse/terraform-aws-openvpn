@@ -43,7 +43,7 @@ and connect to access AWS resources in private subnets.
 ## Technical Requirements
 
 ### Infrastructure
-- **AWS Provider:** Supports versions 5.11 through 6.x
+- **AWS Provider:** Supports 6.x only (`~> 6.0`; AWS 5.x is not supported)
 - **Terraform:** Requires ~> 1.5
 - **Subnets:** Requires both private (backend) and public (load balancer) subnets
 - **VPC:** Must have existing VPC with proper networking setup
@@ -103,7 +103,7 @@ Tests are **integration tests** that create real AWS infrastructure via pytest-i
 make test-keep          # Run tests, keep infrastructure for debugging
 make test-clean         # Run tests, destroy infrastructure after (run before PRs)
 
-# Run a single test (aws5 or aws6 provider version):
+# Run a single test (aws6 provider version):
 pytest -xvvs \
     --aws-region=us-west-2 \
     --test-role-arn="arn:aws:iam::303467602807:role/openvpn-tester" \

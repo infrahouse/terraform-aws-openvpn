@@ -15,16 +15,12 @@
 #   The client ID + scope to paste are emitted as outputs below, and
 #   verify-wif.sh prints them on the instance.
 #
-# Everything here is gated on var.enable_google_directory_revocation (default
-# false). When false, no GCP resources are created. Consumers must still declare
-# a `google` provider block, but it can be empty and uncredentialed -- with the
-# feature off nothing references it, so it is never configured or contacted.
+# This is unconditional: the module always requires a `google` provider and
+# always creates these resources. See the "Google Configuration" section of the
+# README for provider credentials (laptop / CI) and the manual DWD step.
 # ============================================================================
 
 locals {
-  google_revocation_enabled = var.enable_google_directory_revocation
-  gcount                    = local.google_revocation_enabled ? 1 : 0
-
   # module.instance_profile.instance_role_arn is arn:aws:iam::ACCT:role[/path]/NAME.
   # STS presents the caller as arn:aws:sts::ACCT:assumed-role/NAME/SESSION, and
   # the provider's attribute-mapping (below) normalizes that to
@@ -37,11 +33,11 @@ locals {
     local.instance_role_name,
   )
 
-  wif_principal = local.google_revocation_enabled ? format(
+  wif_principal = format(
     "principalSet://iam.googleapis.com/%s/attribute.aws_role/%s",
-    google_iam_workload_identity_pool.openvpn[0].name,
+    google_iam_workload_identity_pool.openvpn.name,
     local.instance_assumed_role_arn,
-  ) : null
+  )
 
   # Everything lives under /opt/openvpn-wif, NOT /etc/openvpn: the OpenVPN role
   # (Puppet + the openvpn package) actively manages /etc/openvpn and reaps files
@@ -54,10 +50,10 @@ locals {
   # AWS IMDS URLs. Equivalent to `gcloud iam workload-identity-pools
   # create-cred-config ... --aws --enable-imdsv2`. {region} is a literal
   # placeholder the google-auth library substitutes at runtime.
-  wif_credential_config = local.google_revocation_enabled ? jsonencode({
+  wif_credential_config = jsonencode({
     universe_domain    = "googleapis.com"
     type               = "external_account"
-    audience           = "//iam.googleapis.com/${google_iam_workload_identity_pool_provider.aws[0].name}"
+    audience           = "//iam.googleapis.com/${google_iam_workload_identity_pool_provider.aws.name}"
     subject_token_type = "urn:ietf:params:aws:token-type:aws4_request"
     token_url          = "https://sts.googleapis.com/v1/token"
     credential_source = {
@@ -67,20 +63,19 @@ locals {
       regional_cred_verification_url = "https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15"
       imdsv2_session_token_url       = "http://169.254.169.254/latest/api/token"
     }
-  }) : null
+  })
 
-  wif_env_file = local.google_revocation_enabled ? templatefile("${path.module}/templates/wif.env.tftpl", {
+  wif_env_file = templatefile("${path.module}/templates/wif.env.tftpl", {
     credential_path   = local.wif_credential_path
-    sa_email          = google_service_account.dir_reader[0].email
-    sa_client_id      = google_service_account.dir_reader[0].unique_id
+    sa_email          = google_service_account.dir_reader.email
+    sa_client_id      = google_service_account.dir_reader.unique_id
     expected_role_arn = local.instance_assumed_role_arn
-    admin_subject     = var.google_workspace_admin_email == null ? "" : var.google_workspace_admin_email
-  }) : ""
+    admin_subject     = var.google_workspace_admin_email
+  })
 
   # Files the instance needs to use the federation, plus the self-verifying
-  # diagnostic. Wired into cloud-init via extra_files in asg.tf; empty when the
-  # feature is disabled so no google outputs are referenced.
-  wif_extra_files = local.google_revocation_enabled ? [
+  # diagnostic. Appended to the userdata module's extra_files in asg.tf.
+  wif_extra_files = [
     {
       path        = local.wif_credential_path
       permissions = "0644"
@@ -96,16 +91,16 @@ locals {
       permissions = "0755"
       content     = file("${path.module}/scripts/verify-wif.sh")
     },
-  ] : []
+  ]
 }
 
 resource "google_project_service" "revocation" {
-  for_each = local.google_revocation_enabled ? toset([
+  for_each = toset([
     "sts.googleapis.com",
     "iamcredentials.googleapis.com",
     "iam.googleapis.com",
     "admin.googleapis.com",
-  ]) : toset([])
+  ])
 
   service            = each.value
   disable_on_destroy = false
@@ -114,8 +109,6 @@ resource "google_project_service" "revocation" {
 # The directory-reader SA. No google_service_account_key is ever created -- that
 # is the whole point.
 resource "google_service_account" "dir_reader" {
-  count = local.gcount
-
   account_id   = var.google_directory_reader_sa_id
   display_name = "OpenVPN directory reader"
   description  = "Keyless (WIF) SA; reads Workspace user suspension status to revoke VPN certs"
@@ -124,8 +117,6 @@ resource "google_service_account" "dir_reader" {
 }
 
 resource "google_iam_workload_identity_pool" "openvpn" {
-  count = local.gcount
-
   workload_identity_pool_id = var.google_wif_pool_id
   display_name              = "OpenVPN AWS federation"
   description               = "Federates the OpenVPN EC2 instance role into GCP (no keys)"
@@ -138,9 +129,7 @@ resource "google_iam_workload_identity_pool_provider" "aws" {
   # reads conf["oidc"][0] before testing the issuer, so it raises TypeError on any non-OIDC provider and
   # its broad except returns FAILED -- contradicting its own "if it's not OIDC ... then pass" branch.
   # Federation here is locked down by attribute_condition below (pinned to one assumed-role ARN).
-  count = local.gcount
-
-  workload_identity_pool_id          = google_iam_workload_identity_pool.openvpn[0].workload_identity_pool_id
+  workload_identity_pool_id          = google_iam_workload_identity_pool.openvpn.workload_identity_pool_id
   workload_identity_pool_provider_id = var.google_wif_provider_id
   display_name                       = "AWS OpenVPN"
 
@@ -168,17 +157,13 @@ resource "google_iam_workload_identity_pool_provider" "aws" {
 # serviceAccountTokenCreator is what makes signJwt (the DWD assertion) work.
 # Both are required.
 resource "google_service_account_iam_member" "wif_impersonate" {
-  count = local.gcount
-
-  service_account_id = google_service_account.dir_reader[0].name
+  service_account_id = google_service_account.dir_reader.name
   role               = "roles/iam.workloadIdentityUser"
   member             = local.wif_principal
 }
 
 resource "google_service_account_iam_member" "wif_token_creator" {
-  count = local.gcount
-
-  service_account_id = google_service_account.dir_reader[0].name
+  service_account_id = google_service_account.dir_reader.name
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = local.wif_principal
 }
@@ -186,39 +171,18 @@ resource "google_service_account_iam_member" "wif_token_creator" {
 # ---------------------------------------------------------------------------
 # Variables
 # ---------------------------------------------------------------------------
-variable "enable_google_directory_revocation" {
-  description = <<-EOT
-    Enable the Google Workspace integration that lets the OpenVPN instance
-    revoke certificates for deactivated (suspended/deleted) directory users,
-    keylessly via Workload Identity Federation.
-
-    When true, the root module MUST configure a `google` provider (project +
-    credentials, e.g. ADC) and set `google_workspace_admin_email`. When false
-    (default), no GCP resources are created; a `google` provider block must
-    still be declared but may be empty and uncredentialed -- nothing references
-    it, so it is never configured.
-  EOT
-  type        = bool
-  default     = false
-}
-
 variable "google_workspace_admin_email" {
   description = <<-EOT
     Email of a Google Workspace admin the VPN impersonates to read who has been
     deactivated (the domain-wide-delegation "subject"). Must be a real, active
     Workspace user with permission to read the directory -- a non-existent
     address fails at runtime with `invalid_grant: Invalid email or User ID`.
-
-    Required when enable_google_directory_revocation = true.
   EOT
   type        = string
-  default     = null
 
   validation {
-    condition = !var.enable_google_directory_revocation || (
-      var.google_workspace_admin_email != null && var.google_workspace_admin_email != ""
-    )
-    error_message = "google_workspace_admin_email must be set when enable_google_directory_revocation is true."
+    condition     = length(trimspace(var.google_workspace_admin_email)) > 0
+    error_message = "google_workspace_admin_email must not be empty."
   }
 }
 
@@ -244,8 +208,8 @@ variable "google_directory_reader_sa_id" {
 # Outputs
 # ---------------------------------------------------------------------------
 output "google_directory_reader_sa_email" {
-  description = "Email of the keyless directory-reader service account (null when the feature is disabled)."
-  value       = one(google_service_account.dir_reader[*].email)
+  description = "Email of the keyless directory-reader service account."
+  value       = google_service_account.dir_reader.email
 }
 
 output "google_directory_reader_client_id" {
@@ -254,15 +218,15 @@ output "google_directory_reader_client_id" {
     Workspace Admin console (https://admin.google.com/ac/owl/domainwidedelegation)
     together with scope https://www.googleapis.com/auth/admin.directory.user.readonly.
     This is the one step Terraform cannot perform; verify-wif.sh prints it on the
-    instance too. Null when the feature is disabled.
+    instance too.
   EOT
-  value       = one(google_service_account.dir_reader[*].unique_id)
+  value       = google_service_account.dir_reader.unique_id
 }
 
 output "google_wif_credential_config_json" {
   description = <<-EOT
     Keyless external-account credential config written to the instance. Contains
-    no secret (only IDs + IMDS URLs). Null when the feature is disabled.
+    no secret (only IDs + IMDS URLs).
   EOT
   value       = local.wif_credential_config
 }

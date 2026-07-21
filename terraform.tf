@@ -18,9 +18,9 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
-    # Used only when enable_google_directory_revocation = true. When the feature
-    # is off, no google resources exist, so the consumer's `provider "google"`
-    # block may be empty and uncredentialed -- it is never configured.
+    # The module always manages GCP resources (keyless directory revocation), so
+    # a configured google provider is always required. See the README "Google
+    # Configuration" section for credentials (laptop / CI).
     google = {
       source  = "hashicorp/google"
       version = "~> 6.0"
