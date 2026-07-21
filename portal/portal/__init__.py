@@ -236,8 +236,7 @@ verb 3
 
 def index_page(name, email):
     domain = email.split("@")[1]
-    return dedent(
-        f"""
+    return dedent(f"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -295,5 +294,4 @@ def index_page(name, email):
             <b>Step 3</b>: Find the profile in the file manager and open it. Follow the onscreen instructions.
         </body>
         </html>
-        """
-    )
+        """)
