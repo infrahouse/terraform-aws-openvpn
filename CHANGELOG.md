@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [7.0.0] - 2026-07-21
+
+### Bug Fixes
+
+- Restore single-flag WIF and require an explicit google provider
+- Grant serviceUsageConsumer to the CI service account
+- Stop passing a quota project to google.auth
+- Grant serviceAccountKeyAdmin and enable cloudresourcemanager
+
+### Styling
+
+- Fix black errors
+
+### Testing
+
+- Consolidate the WIF test into test_module and give CI keyless GCP auth
+
 ## [6.2.0] - 2026-07-20
 
 ### Bug Fixes
