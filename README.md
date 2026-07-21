@@ -509,6 +509,53 @@ and `impersonated_credentials`). It runs on the infrahouse-toolkit embedded
 interpreter (`/opt/infrahouse-toolkit/embedded/bin/python3`) when present,
 otherwise system `python3`; override with `WIF_PYTHON`.
 
+### Step 4: Activate and confirm the revocation sync
+
+Steps 1–3 prove the *authentication* chain. The revocation itself is a daily
+cron, `openvpn_google_user_sync`, that Puppet installs on the instance: it
+reconciles the certificate index against the directory and revokes the
+certificate of every user who is no longer active. The server's own certificate
+is never a candidate.
+
+Two dependencies live **outside this module**, so `enable_google_directory_revocation
+= true` alone does not begin revoking:
+
+| Dependency | Provides | Minimum |
+|------------|----------|---------|
+| `puppet-code` | the fact-gated `openvpn_google_user_sync` cron + wrapper | a release including the feature (present in all environments) |
+| `infrahouse-toolkit` | `ih-openvpn sync-google-users` | **2.61.0** |
+
+Both ship in the InfraHouse APT repo. Enabling the flag triggers an ASG instance
+refresh, so freshly-launched instances pull current versions automatically. The
+wrapper gates itself at runtime — until the toolkit and the delegation from
+Step 2 are both in place it reports "not ready" and revokes nothing — so there is
+no unsafe, half-activated state.
+
+**Preview first.** `--dry-run` reconciles and reports without touching the PKI:
+
+```shell
+. /opt/openvpn-wif/wif.env
+ih-openvpn sync-google-users --dry-run     # lists who WOULD be revoked
+```
+
+The daily cron appears once the fact is set and Puppet has run:
+
+```shell
+crontab -l | grep openvpn_google_user_sync
+```
+
+Run it for real (or wait for the cron) and confirm — a revoked certificate shows
+state `R` in the index:
+
+```shell
+ih-openvpn sync-google-users               # revokes now; the cron does the same daily
+ih-openvpn list-clients
+```
+
+Revocation regenerates the CRL, which OpenVPN re-reads on each new connection, so
+a revoked user is refused at their next handshake. Kill an established session
+for an immediate cutoff.
+
 ### Upgrading to v7.0.0
 
 v7.0.0 added the `google` provider to the module's requirements, so **every**
