@@ -22,10 +22,11 @@ connect to reach private resources inside your VPC — no manual certificate han
 ```hcl
 module "openvpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "5.3.0"
+  version = "7.0.0"
   providers = {
     aws     = aws
     aws.dns = aws
+    google  = google
   }
 
   environment                = "production"
@@ -41,7 +42,7 @@ module "openvpn" {
 }
 ```
 
-After the first apply, finish the [Google OAuth setup](getting-started.md#google-oauth-setup) so the
+After the first apply, finish the [Google configuration](configuration.md#google-configuration) so the
 portal can authenticate users.
 
 ## Documentation

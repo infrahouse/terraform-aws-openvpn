@@ -44,10 +44,9 @@ module "openvpn" {
     }
   ]
 
-  # Keyless Google Workspace directory revocation (feature under test).
-  enable_google_directory_revocation = true
-  google_workspace_admin_email       = var.google_workspace_admin_email
-  google_wif_pool_id                 = "ovpn-wif-${random_string.suffix.result}"
-  google_wif_provider_id             = "aws-ovpn-${random_string.suffix.result}"
-  google_directory_reader_sa_id      = "ovpn-dir-${random_string.suffix.result}"
+  # Keyless Google Workspace directory revocation (always on).
+  google_workspace_admin_email  = var.google_workspace_admin_email
+  google_wif_pool_id            = "ovpn-wif-${random_string.suffix.result}"
+  google_wif_provider_id        = "aws-ovpn-${random_string.suffix.result}"
+  google_directory_reader_sa_id = "ovpn-dir-${random_string.suffix.result}"
 }

@@ -32,6 +32,7 @@ terraform.tfvars
 tf.plan
 .idea
 /docs/_build/
+site/
 /plan.stderr
 /plan.stdout
 __pycache__

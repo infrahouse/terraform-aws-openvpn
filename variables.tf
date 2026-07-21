@@ -719,5 +719,5 @@ variable "efs_backup_retention_days" {
   }
 }
 
-# enable_google_directory_revocation and the other google_* variables live in
-# google-wif.tf, next to the resources they drive.
+# The google_* variables (google_workspace_admin_email, google_wif_pool_id, ...)
+# live in google-wif.tf, next to the resources they drive.

@@ -1,3 +1,4 @@
+---
 site_name: InfraHouse openvpn
 site_url: https://infrahouse.github.io/terraform-aws-openvpn/
 site_description: Terraform module documentation
@@ -40,6 +41,9 @@ nav:
   - Architecture: architecture.md
   - Configuration: configuration.md
   - Examples: examples.md
+  - Security: security.md
+  - Monitoring & Alerts: monitoring.md
+  - Cost Optimization: cost.md
   - Troubleshooting: troubleshooting.md
   - Changelog: changelog.md
 

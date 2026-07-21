@@ -18,9 +18,9 @@
 #         workload_identity_provider: "<workload_identity_provider from below>"
 #         service_account: "<service_account from below>"
 #
-# Configuration (environment variables; all have defaults):
-#   GOOGLE_PROJECT        GCP project. Default: openvpn-427715
-#   GITHUB_REPO           org/repo allowed to federate. Default: infrahouse/terraform-aws-openvpn
+# Configuration (environment variables):
+#   GOOGLE_PROJECT        REQUIRED. GCP project ID the module deploys into.
+#   GITHUB_REPO           REQUIRED. org/repo whose GitHub Actions authenticate to GCP.
 #   CI_SA_ID              account_id of the CI service account. Default: openvpn-tester
 #   WIF_GITHUB_POOL       pool id. Default: github
 #   WIF_GITHUB_PROVIDER   provider id. Default: github-oidc
@@ -30,9 +30,30 @@
 
 set -euo pipefail
 
-PROJECT="${GOOGLE_PROJECT:-openvpn-427715}"
-REPO="${GITHUB_REPO:-infrahouse/terraform-aws-openvpn}"
+PROJECT="${GOOGLE_PROJECT:-}"
+REPO="${GITHUB_REPO:-}"
 SA_ID="${CI_SA_ID:-openvpn-tester}"
+
+# GOOGLE_PROJECT and GITHUB_REPO have NO defaults on purpose: a wrong default
+# would silently create resources in the wrong GCP project or trust the wrong
+# GitHub repo. Require them, and say exactly how to find each.
+if [ -z "$PROJECT" ] || [ -z "$REPO" ]; then
+    echo "This script needs two values it will not guess:" >&2
+    echo >&2
+    if [ -z "$PROJECT" ]; then
+        echo "  GOOGLE_PROJECT  the GCP project ID the module deploys into." >&2
+        echo "                  Find it with the PROJECT_ID column of:" >&2
+        echo "                    gcloud projects list" >&2
+    fi
+    if [ -z "$REPO" ]; then
+        echo "  GITHUB_REPO     org/repo whose GitHub Actions authenticate to GCP" >&2
+        echo "                  (e.g. my-org/my-terraform-repo)." >&2
+    fi
+    echo >&2
+    echo "Then re-run, e.g.:" >&2
+    echo "  GOOGLE_PROJECT=my-project GITHUB_REPO=my-org/my-repo bash $0" >&2
+    exit 1
+fi
 POOL="${WIF_GITHUB_POOL:-github}"
 PROVIDER="${WIF_GITHUB_PROVIDER:-github-oidc}"
 GRANT_TEST_ROLES="${CI_GRANT_TEST_ROLES:-true}"
@@ -128,7 +149,13 @@ else
 fi
 
 echo
-echo "Done. Add these to the 'Configure GCP Credentials' step in terraform-CI.yml:"
+echo "Done. Add this step to your plan AND apply workflows (each job needs"
+echo "'permissions: id-token: write'):"
 echo
-echo "  workload_identity_provider: projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/providers/${PROVIDER}"
-echo "  service_account:            ${SA}"
+cat <<YAML
+      - name: Configure GCP Credentials
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/providers/${PROVIDER}
+          service_account: ${SA}
+YAML
