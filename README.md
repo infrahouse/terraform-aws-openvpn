@@ -18,7 +18,7 @@ so authorized users can access resources in private subnets.
 ```hcl
 module "vpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "8.0.0"
+  version = "9.0.0"
 
   providers = {
     aws     = aws
