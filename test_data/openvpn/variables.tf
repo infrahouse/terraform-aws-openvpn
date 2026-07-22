@@ -15,7 +15,7 @@ variable "google_project" {
   type        = string
 }
 
-variable "google_workspace_admin_email" {
-  description = "Workspace admin the VPN impersonates to read the directory (domain-wide-delegation subject)."
-  type        = string
+variable "google_workspace_admin_emails" {
+  description = "Workspace admins the VPN impersonates to read each tenant's directory (domain-wide-delegation subjects), one per Workspace."
+  type        = list(string)
 }

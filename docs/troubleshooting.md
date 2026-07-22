@@ -87,7 +87,7 @@ chain one link at a time, so the first failing tier tells you where to look.
 | Tier 2 fails | Federation rejected — usually the AWS role ARN does not match the attribute condition, or the pool/provider is not `ACTIVE`. |
 | Tier 3 fails | The `workloadIdentityUser` / `serviceAccountTokenCreator` bindings on the service account are missing. |
 | Tier 4: `unauthorized_client` | The subject is valid, but the SA's client ID is not authorized for the scope. Complete [domain-wide delegation](configuration.md#manual-once-authorize-domain-wide-delegation). Just authorized it? Wait a few minutes and re-run — propagation is not instant. |
-| Tier 4: `invalid_grant: Invalid email or User ID` | Google cannot find the subject: `google_workspace_admin_email` is not a real, active user in that Workspace. |
+| Tier 4: `invalid_grant: Invalid email or User ID` | Google cannot find the subject: an entry in `google_workspace_admin_emails` is not a real, active user in that Workspace. |
 | `google-auth is installed but too old` | The distro `python3-google-auth` (1.5.x) lacks `external_account` and `impersonated_credentials`. Install `google-auth >= 2` and `google-api-python-client`. |
 
 The script is read-only — it never installs or changes anything.

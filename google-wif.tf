@@ -65,12 +65,18 @@ locals {
     }
   })
 
+  # One admin subject per Workspace tenant. WIF_ADMIN_SUBJECTS (comma-joined) is
+  # authoritative for the toolkit (>= 2.62.0); WIF_ADMIN_SUBJECT stays as the
+  # first element so an older reader still works (first tenant only).
+  wif_admin_subjects = var.google_workspace_admin_emails
+
   wif_env_file = templatefile("${path.module}/templates/wif.env.tftpl", {
     credential_path   = local.wif_credential_path
     sa_email          = google_service_account.dir_reader.email
     sa_client_id      = google_service_account.dir_reader.unique_id
     expected_role_arn = local.instance_assumed_role_arn
-    admin_subject     = var.google_workspace_admin_email
+    admin_subject     = local.wif_admin_subjects[0]
+    admin_subjects    = join(",", local.wif_admin_subjects)
   })
 
   # Files the instance needs to use the federation, plus the self-verifying
@@ -171,18 +177,31 @@ resource "google_service_account_iam_member" "wif_token_creator" {
 # ---------------------------------------------------------------------------
 # Variables
 # ---------------------------------------------------------------------------
-variable "google_workspace_admin_email" {
+variable "google_workspace_admin_emails" {
   description = <<-EOT
-    Email of a Google Workspace admin the VPN impersonates to read who has been
-    deactivated (the domain-wide-delegation "subject"). Must be a real, active
-    Workspace user with permission to read the directory -- a non-existent
-    address fails at runtime with `invalid_grant: Invalid email or User ID`.
+    Google Workspace admin emails the VPN impersonates to read who has been
+    deactivated (the domain-wide-delegation "subjects"). Provide ONE per Google
+    Workspace tenant whose users you allow to connect -- e.g. separate tenants
+    behind the same VPN each need their own admin here. Each must be a real,
+    active admin in its own Workspace, and the directory-reader SA's client ID
+    (output google_directory_reader_client_id) must be authorized for scope
+    admin.directory.user.readonly in EACH of those Workspaces' Admin consoles.
+    A non-existent address fails at runtime with
+    `invalid_grant: Invalid email or User ID`. One tenant = a one-element list.
   EOT
-  type        = string
+  type        = list(string)
 
   validation {
-    condition     = length(trimspace(var.google_workspace_admin_email)) > 0
-    error_message = "google_workspace_admin_email must not be empty."
+    condition     = length(var.google_workspace_admin_emails) > 0
+    error_message = "Provide at least one Workspace admin email."
+  }
+  validation {
+    condition     = alltrue([for e in var.google_workspace_admin_emails : length(trimspace(e)) > 0])
+    error_message = "Workspace admin emails must not be blank."
+  }
+  validation {
+    condition     = length(var.google_workspace_admin_emails) == length(distinct(var.google_workspace_admin_emails))
+    error_message = "Workspace admin emails must be unique."
   }
 }
 

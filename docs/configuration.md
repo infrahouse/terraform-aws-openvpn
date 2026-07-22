@@ -158,20 +158,30 @@ gcloud projects create acme-openvpn
 
 Use that ID everywhere `YOUR_GCP_PROJECT` appears below.
 
-#### Pick a Workspace admin
+#### Pick a Workspace admin (one per tenant)
 
-`google_workspace_admin_email` is the Google Workspace admin the VPN impersonates
-(via domain-wide delegation) to read who has been deactivated. It must be:
+`google_workspace_admin_emails` is a **list** — the Google Workspace admin the VPN
+impersonates (via domain-wide delegation) to read who has been deactivated, **one
+per Workspace tenant** whose users you allow to connect. Each entry must be:
 
-- a **real, active user** in your Workspace — a made-up address fails at runtime
+- a **real, active user** in *its* Workspace — a made-up address fails at runtime
   with `invalid_grant: Invalid email or User ID`;
 - an **admin allowed to read the directory** — a super admin, or a custom admin
   role with the *Users → Read* privilege.
 
 A dedicated role account (e.g. `automation-admin@your-domain.com`) is often
 cleaner than a specific person, so revocation doesn't break when someone leaves.
-Confirm the account exists under
+Confirm each account exists under
 [Admin console → Directory → Users](https://admin.google.com/ac/users).
+
+> **One list, one SA, many Workspaces.** A GCP project is not a Google Workspace.
+> This module creates a **single** directory-reader service account in your one
+> GCP project; you authorize that same SA client ID via domain-wide delegation in
+> **each** Workspace's Admin console (see the DWD step below) and list one admin
+> per Workspace here. If your allowed domains are separate Workspace tenants (e.g.
+> `acme.io` and `acme.dev`), you need an entry for each — otherwise deactivated
+> users in the un-listed tenant keep working VPN certs. One tenant = a one-element
+> list.
 
 #### Declare the provider
 
@@ -192,7 +202,8 @@ module "openvpn" {
     google  = google   # <-- required
   }
   # ...
-  google_workspace_admin_email = "admin@example.com"  # a REAL, active Workspace admin
+  # One REAL, active admin per Workspace tenant:
+  google_workspace_admin_emails = ["admin@example.com", "admin@example.dev"]
 }
 ```
 
@@ -302,7 +313,7 @@ Inputs:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `google_workspace_admin_email` | *required* | Email of a **real** Workspace admin the VPN impersonates to read the directory. |
+| `google_workspace_admin_emails` | *required* | List of **real** Workspace admins the VPN impersonates to read the directory — one per Workspace tenant. |
 | `google_wif_pool_id` | `openvpn-wif-pool` | Workload identity pool ID. |
 | `google_wif_provider_id` | `aws-openvpn` | Workload identity pool *provider* ID. |
 | `google_directory_reader_sa_id` | `openvpn-dir-reader` | Account ID of the keyless directory-reader service account. |
@@ -318,8 +329,11 @@ Outputs:
 #### Manual, once: authorize domain-wide delegation
 
 This is the **only** part Terraform cannot do — no resource exists in
-`hashicorp/google` for it. It is a one-time action per service account and
-requires a Workspace **super admin**.
+`hashicorp/google` for it. It requires a Workspace **super admin**, and you do it
+**once in every Workspace tenant** you listed in `google_workspace_admin_emails`
+— pasting the **same** client ID + scope into each Workspace's Admin console. A
+tenant you skip leaves its deactivated users un-revoked; `verify-wif.sh` Tier 4
+checks every subject and stays red until they are all authorized.
 
 Get the exact values by running the verification script on any OpenVPN
 instance — it reads them from `wif.env`, so no `gcloud` or `terraform output`
@@ -334,16 +348,20 @@ on (once it is authorized the block is no longer shown):
 
 ```text
 === Tier 4: domain-wide delegation -> Directory API ===
-FAIL Tier 4: domain-wide delegation rejected (unauthorized_client: ...).
-  Subject: admin@example.com
+FAIL Tier 4 [admin@example.com]: domain-wide delegation rejected (unauthorized_client: ...).
+FAIL Tier 4: 1 of 1 Workspace(s) rejected DWD: admin@example.com.
   Domain-wide delegation setup (one-time, requires a Workspace super admin):
     1. Open https://admin.google.com/ac/owl/domainwidedelegation
     2. Click 'Add new' and enter exactly:
          Client ID:    110312795661293035653
          OAuth scopes: https://www.googleapis.com/auth/admin.directory.user.readonly
     3. Click Authorize.
-  Then re-run (authorization takes a few minutes to propagate).
+  Authorize the client id in EACH failing Workspace's Admin console, then
+  re-run (authorization takes a few minutes to propagate).
 ```
+
+With more than one tenant, Tier 4 prints one line per Workspace and stays red
+until **every** one is authorized.
 
 Follow those three steps in the Workspace Admin console. The menu path, if you
 prefer navigating, is **Security → Access and data control → API controls →
@@ -378,7 +396,7 @@ Success looks like:
 PASS Tier 1: instance ARN matches the locked role
 PASS Tier 2: federated token minted: ya29.d.c0AZ4bNp... ...
 PASS Tier 3: SA-impersonation token minted: ya29.c.c0AZ4bNp... ...
-PASS Tier 4: read suspended users via DWD: []
+PASS Tier 4 [admin@example.com]: read suspended users via DWD: []
 === All requested tiers passed ===
 ```
 

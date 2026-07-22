@@ -26,11 +26,11 @@ module "vpn" {
     google  = google
   }
 
-  backend_subnet_ids         = module.management.subnet_private_ids
-  lb_subnet_ids              = module.management.subnet_public_ids
-  google_oauth_client_writer = tolist(data.aws_iam_roles.sso-admin.arns)[0]
-  zone_id                    = module.infrahouse_com.infrahouse_zone_id
-  google_workspace_admin_email = "admin@infrahouse.com"
+  backend_subnet_ids            = module.management.subnet_private_ids
+  lb_subnet_ids                 = module.management.subnet_public_ids
+  google_oauth_client_writer    = tolist(data.aws_iam_roles.sso-admin.arns)[0]
+  zone_id                       = module.infrahouse_com.infrahouse_zone_id
+  google_workspace_admin_emails = ["admin@infrahouse.com"] # one per Workspace tenant
 }
 ```
 
@@ -84,10 +84,10 @@ verification, and the revocation sync — see
 (source: [`docs/configuration.md`](docs/configuration.md)).
 
 In short: declare and pass a `google` provider (it is not auto-inherited through
-an explicit `providers` map), set `google_workspace_admin_email` to a real
-Workspace admin, `terraform apply`, then authorize domain-wide delegation once in
-the Workspace console (`sudo /opt/openvpn-wif/verify-wif.sh` on an instance prints
-the exact Client ID + scope to paste).
+an explicit `providers` map), set `google_workspace_admin_emails` to a real
+Workspace admin per tenant, `terraform apply`, then authorize domain-wide
+delegation once in **each** Workspace console (`sudo /opt/openvpn-wif/verify-wif.sh`
+on an instance prints the exact Client ID + scope to paste).
 
 ## Contributing
 
@@ -229,7 +229,7 @@ Apache 2.0 — see [LICENSE](LICENSE).
 | <a name="input_google_oauth_client_writer"></a> [google\_oauth\_client\_writer](#input\_google\_oauth\_client\_writer) | ARN of an IAM role that can update content of google\_oauth\_client secret | `string` | n/a | yes |
 | <a name="input_google_wif_pool_id"></a> [google\_wif\_pool\_id](#input\_google\_wif\_pool\_id) | Workload Identity Pool ID for the OpenVPN AWS federation. | `string` | `"openvpn-wif-pool"` | no |
 | <a name="input_google_wif_provider_id"></a> [google\_wif\_provider\_id](#input\_google\_wif\_provider\_id) | Workload Identity Pool *provider* ID for the AWS provider. | `string` | `"aws-openvpn"` | no |
-| <a name="input_google_workspace_admin_email"></a> [google\_workspace\_admin\_email](#input\_google\_workspace\_admin\_email) | Email of a Google Workspace admin the VPN impersonates to read who has been<br/>deactivated (the domain-wide-delegation "subject"). Must be a real, active<br/>Workspace user with permission to read the directory -- a non-existent<br/>address fails at runtime with `invalid_grant: Invalid email or User ID`. | `string` | n/a | yes |
+| <a name="input_google_workspace_admin_emails"></a> [google\_workspace\_admin\_emails](#input\_google\_workspace\_admin\_emails) | Google Workspace admin emails the VPN impersonates to read who has been<br/>deactivated (the domain-wide-delegation "subjects"). Provide ONE per Google<br/>Workspace tenant whose users you allow to connect -- e.g. separate tenants<br/>behind the same VPN each need their own admin here. Each must be a real,<br/>active admin in its own Workspace, and the directory-reader SA's client ID<br/>(output google\_directory\_reader\_client\_id) must be authorized for scope<br/>admin.directory.user.readonly in EACH of those Workspaces' Admin consoles.<br/>A non-existent address fails at runtime with<br/>`invalid_grant: Invalid email or User ID`. One tenant = a one-element list. | `list(string)` | n/a | yes |
 | <a name="input_gzip_userdata"></a> [gzip\_userdata](#input\_gzip\_userdata) | Whether to gzip compress the cloud-init userdata before base64 encoding.<br/><br/>When true, the userdata is gzip-compressed, significantly reducing its size.<br/>This is important because AWS limits EC2 userdata to 16 KB.<br/><br/>The OpenVPN module's userdata can exceed this limit when extra\_repos includes<br/>embedded GPG keys (~3-6 KB each), multiple SSH users, or extensive custom\_facts.<br/><br/>Default: true (recommended to avoid hitting the 16 KB limit) | `bool` | `true` | no |
 | <a name="input_instance_type"></a> [instance\_type](#input\_instance\_type) | EC2 instance type for OpenVPN server instances.<br/><br/>Recommendation: c6in family (compute-optimized, network-optimized)<br/><br/>Why compute-optimized for VPN?<br/>- OpenVPN encryption/decryption is CPU-intensive<br/>- C-series instances provide better performance per dollar for VPN workloads<br/>- Higher single-thread performance benefits VPN connection handling<br/><br/>Recommended instance types:<br/>- c6in.large (DEFAULT): 2 vCPU, 4 GB RAM, 25 Gbps network - Best balance for production<br/>- c6in.xlarge: 4 vCPU, 8 GB RAM, 30 Gbps network - High user count (>100 concurrent)<br/>- c6in.2xlarge: 8 vCPU, 16 GB RAM, 40 Gbps network - Very high throughput needs<br/>- t3a.small: 2 vCPU, 2 GB RAM, 5 Gbps network - Development/testing only<br/><br/>Instance type impacts autoscaling:<br/>- var.autoscaling\_target\_network\_percentage uses the instance's baseline network bandwidth<br/>- Larger instances = higher network bandwidth threshold for autoscaling<br/>- Example: c6in.large (25 Gbps) @ 60% = scales at 15 Gbps<br/>- Example: c6in.xlarge (30 Gbps) @ 60% = scales at 18 Gbps<br/><br/>Cost comparison (us-east-1, on-demand):<br/>- c6in.large: ~$82/month (RECOMMENDED)<br/>- m6in.large: ~$102/month (general-purpose, 19% more expensive)<br/>- t3a.small: ~$15/month (testing only, limited network performance)<br/><br/>Network performance:<br/>- c6in family: 25-200 Gbps (network-optimized)<br/>- m6in family: 25-200 Gbps (network-optimized)<br/>- m7i family: Up to 12.5 Gbps (general-purpose)<br/>- t3/t3a family: Up to 5 Gbps (burstable)<br/><br/>When to use different instance families:<br/>- c6in: Best for production VPN (CPU + network optimized)<br/>- m6in/m7i: If you need more RAM for additional services<br/>- t3/t3a: Development, testing, or very low user count (<10 users)<br/><br/>Default: "c6in.large" | `string` | `"c6in.large"` | no |
 | <a name="input_key_pair_name"></a> [key\_pair\_name](#input\_key\_pair\_name) | SSH keypair name for accessing OpenVPN server instances.<br/><br/>⚠️  SECURITY WARNING:<br/>- SSH access should be limited to emergency troubleshooting only<br/>- Use AWS Systems Manager Session Manager for routine access instead<br/>- Restrict security group to allow SSH only from trusted IP ranges<br/>- Consider using short-lived SSH certificates instead of long-lived keys<br/>- Rotate SSH keys regularly<br/>- Monitor SSH access via CloudWatch and VPC Flow Logs<br/><br/>The key pair must exist in AWS before applying this module.<br/><br/>If not specified (null), the module will generate a temporary key pair.<br/>However, for production use, you should provide a managed key pair.<br/><br/>Example: "my-openvpn-emergency-key"<br/><br/>Default: null (module generates a temporary key) | `string` | `null` | no |

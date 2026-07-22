@@ -35,7 +35,7 @@ module "openvpn" {
   key_pair_name        = aws_key_pair.black-mbp.key_name
   allowed_domains = [
     "infrahouse.com",
-    "tinyfish.io",
+    "example.com",
   ]
   routes = [
     {
@@ -45,7 +45,7 @@ module "openvpn" {
   ]
 
   # Keyless Google Workspace directory revocation (always on).
-  google_workspace_admin_email  = var.google_workspace_admin_email
+  google_workspace_admin_emails = var.google_workspace_admin_emails
   google_wif_pool_id            = "ovpn-wif-${random_string.suffix.result}"
   google_wif_provider_id        = "aws-ovpn-${random_string.suffix.result}"
   google_directory_reader_sa_id = "ovpn-dir-${random_string.suffix.result}"

@@ -38,11 +38,15 @@
 #                                   (terraform output google_directory_reader_client_id).
 #   WIF_EXPECTED_ROLE_ARN          Normalized assumed-role ARN the provider is locked to.
 #                                   If set, Tier 1 asserts the instance matches it.
-#   WIF_ADMIN_SUBJECT              Workspace admin the SA impersonates. If set, runs Tier 4.
+#   WIF_ADMIN_SUBJECTS            Comma-separated Workspace admins the SA
+#                                   impersonates, one per Workspace tenant. If set,
+#                                   Tier 4 checks EACH and is red if any fails.
+#   WIF_ADMIN_SUBJECT             Deprecated single-tenant spelling, used only when
+#                                   WIF_ADMIN_SUBJECTS is unset.
 #   WIF_DIRECTORY_SCOPE            Directory scope. Default: admin.directory.user.readonly.
 #
-# Exit status: non-zero if any required tier (1-3, and 4 when WIF_ADMIN_SUBJECT
-# is set) fails.
+# Exit status: non-zero if any required tier (1-3, and 4 when an admin subject is
+# set) fails -- for Tier 4, if ANY configured Workspace fails.
 
 set -euo pipefail
 
@@ -59,7 +63,9 @@ fi
 CRED_CONFIG="${GOOGLE_APPLICATION_CREDENTIALS:-/opt/openvpn-wif/google-wif.json}"
 SA_EMAIL="${WIF_SA_EMAIL:-}"
 EXPECTED_ROLE_ARN="${WIF_EXPECTED_ROLE_ARN:-}"
-ADMIN_SUBJECT="${WIF_ADMIN_SUBJECT:-}"
+# WIF_ADMIN_SUBJECTS (comma-separated, one admin per Workspace) is authoritative;
+# fall back to the deprecated single WIF_ADMIN_SUBJECT when it is unset.
+ADMIN_SUBJECTS="${WIF_ADMIN_SUBJECTS:-${WIF_ADMIN_SUBJECT:-}}"
 DIRECTORY_SCOPE="${WIF_DIRECTORY_SCOPE:-https://www.googleapis.com/auth/admin.directory.user.readonly}"
 
 export GOOGLE_APPLICATION_CREDENTIALS="$CRED_CONFIG"
@@ -120,7 +126,7 @@ fi
 [ -n "$SA_EMAIL" ] || fail "WIF_SA_EMAIL is required for Tiers 2-4"
 [ -f "$CRED_CONFIG" ] || fail "credential config not found at $CRED_CONFIG"
 
-"$PYTHON" - "$SA_EMAIL" "$DIRECTORY_SCOPE" "$ADMIN_SUBJECT" <<'PYEOF'
+"$PYTHON" - "$SA_EMAIL" "$DIRECTORY_SCOPE" "$ADMIN_SUBJECTS" <<'PYEOF'
 """Tiers 2-4 of the WIF runtime check, using the google-auth libraries."""
 import os
 import sys
@@ -152,7 +158,9 @@ except ImportError as error:
         f"(version {version}): {error}.\n{_INSTALL_HINT}"
     )
 
-sa_email, directory_scope, admin_subject = sys.argv[1], sys.argv[2], sys.argv[3]
+sa_email, directory_scope = sys.argv[1], sys.argv[2]
+# One admin subject per Workspace tenant (comma-separated). Empty entries dropped.
+admin_subjects = [s.strip() for s in sys.argv[3].split(",") if s.strip()]
 sa_client_id = os.environ.get("WIF_SA_CLIENT_ID", "")
 request = gt.Request()
 cloud_platform = "https://www.googleapis.com/auth/cloud-platform"
@@ -187,14 +195,17 @@ sa_credentials = impersonated_credentials.Credentials(
 sa_credentials.refresh(request)
 print("PASS Tier 3: SA-impersonation token minted:", sa_credentials.token[:22], "...")
 
-# Tier 4: domain-wide delegation -> Directory API. Opt-in: needs a real admin
-# subject AND the manual DWD authorization in the Workspace Admin console.
+# Tier 4: domain-wide delegation -> Directory API, checked per Workspace tenant.
+# Opt-in: needs a real admin subject AND the manual DWD authorization in EACH
+# Workspace's Admin console. Every configured subject must pass -- one authorized
+# Workspace is not enough when users span several tenants.
 print("=== Tier 4: domain-wide delegation -> Directory API ===")
 
 # The setup block is printed only when it is actionable (skipped or rejected) --
 # not on success, where it would be pure noise.
-if not admin_subject:
-    print("SKIP Tier 4: WIF_ADMIN_SUBJECT is empty; set it to a real Workspace admin to test the call.")
+if not admin_subjects:
+    print("SKIP Tier 4: no admin subject set (WIF_ADMIN_SUBJECTS/WIF_ADMIN_SUBJECT);"
+          " set one admin per Workspace to test the call.")
     print(dwd_setup_block())
     sys.exit(0)
 
@@ -202,28 +213,36 @@ from googleapiclient.discovery import build
 
 from google.auth.exceptions import RefreshError
 
-dwd_credentials = impersonated_credentials.Credentials(
-    source_credentials=source,
-    target_principal=sa_email,
-    target_scopes=[directory_scope],
-    subject=admin_subject,
-)
-directory = build("admin", "directory_v1", credentials=dwd_credentials, cache_discovery=False)
-try:
-    response = directory.users().list(
-        customer="my_customer", query="isSuspended=true", maxResults=5
-    ).execute()
-except RefreshError as error:
-    # Rejected until the client id above is authorized for the scope AND
-    # admin_subject is a real user in that Workspace.
-    sys.exit(
-        f"FAIL Tier 4: domain-wide delegation rejected ({error.args[0]}).\n"
-        f"  Subject: {admin_subject}\n"
-        f"{dwd_setup_block()}\n"
-        f"  Then re-run (authorization takes a few minutes to propagate)."
+failures = []
+for admin_subject in admin_subjects:
+    dwd_credentials = impersonated_credentials.Credentials(
+        source_credentials=source,
+        target_principal=sa_email,
+        target_scopes=[directory_scope],
+        subject=admin_subject,
     )
-suspended = [user["primaryEmail"] for user in response.get("users", [])]
-print("PASS Tier 4: read suspended users via DWD:", suspended)
+    directory = build("admin", "directory_v1", credentials=dwd_credentials, cache_discovery=False)
+    try:
+        response = directory.users().list(
+            customer="my_customer", query="isSuspended=true", maxResults=5
+        ).execute()
+    except RefreshError as error:
+        # Rejected until the client id above is authorized for the scope in THIS
+        # subject's Workspace AND admin_subject is a real user there.
+        print(f"FAIL Tier 4 [{admin_subject}]: domain-wide delegation rejected ({error.args[0]}).")
+        failures.append(admin_subject)
+        continue
+    suspended = [user["primaryEmail"] for user in response.get("users", [])]
+    print(f"PASS Tier 4 [{admin_subject}]: read suspended users via DWD: {suspended}")
+
+if failures:
+    sys.exit(
+        f"FAIL Tier 4: {len(failures)} of {len(admin_subjects)} Workspace(s) rejected DWD: "
+        f"{', '.join(failures)}.\n"
+        f"{dwd_setup_block()}\n"
+        f"  Authorize the client id in EACH failing Workspace's Admin console, then\n"
+        f"  re-run (authorization takes a few minutes to propagate)."
+    )
 PYEOF
 
 echo "=== All requested tiers passed ==="
