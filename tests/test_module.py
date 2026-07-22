@@ -274,8 +274,8 @@ def test_module(
                 lb_subnet_ids      = {json.dumps(subnet_public_ids)}
                 backend_subnet_ids = {json.dumps(subnet_public_ids)}
 
-                google_project               = "{google_project}"
-                google_workspace_admin_email = "{admin_email}"
+                google_project                = "{google_project}"
+                google_workspace_admin_emails = ["{admin_email}"]
                 """))
         if test_role_arn:
             fp.write(f'\nrole_arn = "{test_role_arn}"\n')
