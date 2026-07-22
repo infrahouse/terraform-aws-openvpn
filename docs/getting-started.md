@@ -42,7 +42,7 @@ data "aws_route53_zone" "this" {
 
 module "openvpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "7.0.0"
+  version = "8.0.0"
   providers = {
     aws     = aws
     aws.dns = aws.dns
@@ -92,7 +92,7 @@ branch through to a working connection.
 ```hcl
 module "vpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "7.0.0"
+  version = "8.0.0"
 
   providers = {
     aws     = aws
@@ -157,7 +157,7 @@ index 0000000..035b925
 @@ -0,0 +1,16 @@
 +module "vpn" {
 +  source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-+  version = "7.0.0"
++  version = "8.0.0"
 +  providers = {
 +    aws     = aws
 +    aws.dns = aws

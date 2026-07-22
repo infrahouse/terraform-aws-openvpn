@@ -8,7 +8,7 @@ Common deployment patterns. All examples assume the two providers from
 ```hcl
 module "openvpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "7.0.0"
+  version = "8.0.0"
   providers = {
     aws     = aws
     aws.dns = aws.dns
