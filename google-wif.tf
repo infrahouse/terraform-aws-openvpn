@@ -70,6 +70,20 @@ locals {
   # first element so an older reader still works (first tenant only).
   wif_admin_subjects = var.google_workspace_admin_emails
 
+  # Effective names of the GCP resources this module creates. The defaults carry a
+  # random, stable-in-state suffix so two OpenVPN deployments -- even both with the
+  # default service_name "openvpn" -- can create their WIF resources in the SAME
+  # GCP project without colliding. The suffix is generated once and persists in
+  # state; it does NOT churn on subsequent applies. Set any *_id variable to pin a
+  # fixed name (e.g. an existing deployment keeping its SA and its already-authorized
+  # domain-wide delegation -- recreating the SA would mint a new client id).
+  # service_name is only for readability; uniqueness comes from the suffix. The SA
+  # account_id is capped at 30 chars, so its service_name portion is truncated.
+  wif_name_suffix  = random_string.google_wif.result
+  dir_reader_sa_id = coalesce(var.google_directory_reader_sa_id, "${substr(var.service_name, 0, 11)}-dir-reader-${local.wif_name_suffix}")
+  wif_pool_id      = coalesce(var.google_wif_pool_id, "${substr(var.service_name, 0, 16)}-wif-pool-${local.wif_name_suffix}")
+  wif_provider_id  = coalesce(var.google_wif_provider_id, "aws-${substr(var.service_name, 0, 21)}-${local.wif_name_suffix}")
+
   wif_env_file = templatefile("${path.module}/templates/wif.env.tftpl", {
     credential_path   = local.wif_credential_path
     sa_email          = google_service_account.dir_reader.email
@@ -100,6 +114,16 @@ locals {
   ]
 }
 
+# Stable, per-deployment suffix that keeps the WIF resource names unique within a
+# GCP project. Generated once and kept in state; changing it would recreate the SA
+# (new client id -> re-authorize domain-wide delegation), so it must never churn.
+resource "random_string" "google_wif" {
+  length  = 6
+  special = false
+  upper   = false
+  numeric = true
+}
+
 resource "google_project_service" "revocation" {
   for_each = toset([
     "sts.googleapis.com",
@@ -115,7 +139,7 @@ resource "google_project_service" "revocation" {
 # The directory-reader SA. No google_service_account_key is ever created -- that
 # is the whole point.
 resource "google_service_account" "dir_reader" {
-  account_id   = var.google_directory_reader_sa_id
+  account_id   = local.dir_reader_sa_id
   display_name = "OpenVPN directory reader"
   description  = "Keyless (WIF) SA; reads Workspace user suspension status to revoke VPN certs"
 
@@ -123,7 +147,7 @@ resource "google_service_account" "dir_reader" {
 }
 
 resource "google_iam_workload_identity_pool" "openvpn" {
-  workload_identity_pool_id = var.google_wif_pool_id
+  workload_identity_pool_id = local.wif_pool_id
   display_name              = "OpenVPN AWS federation"
   description               = "Federates the OpenVPN EC2 instance role into GCP (no keys)"
 
@@ -136,7 +160,7 @@ resource "google_iam_workload_identity_pool_provider" "aws" {
   # its broad except returns FAILED -- contradicting its own "if it's not OIDC ... then pass" branch.
   # Federation here is locked down by attribute_condition below (pinned to one assumed-role ARN).
   workload_identity_pool_id          = google_iam_workload_identity_pool.openvpn.workload_identity_pool_id
-  workload_identity_pool_provider_id = var.google_wif_provider_id
+  workload_identity_pool_provider_id = local.wif_provider_id
   display_name                       = "AWS OpenVPN"
 
   aws {
@@ -206,21 +230,36 @@ variable "google_workspace_admin_emails" {
 }
 
 variable "google_wif_pool_id" {
-  description = "Workload Identity Pool ID for the OpenVPN AWS federation."
+  description = <<-EOT
+    Workload Identity Pool ID for the OpenVPN AWS federation. Defaults to
+    `<service_name>-wif-pool-<random>` so multiple deployments can share a GCP
+    project without colliding. Set to pin a fixed name (e.g. to keep an existing
+    pool). Pre-10.0.0 default was `openvpn-wif-pool`.
+  EOT
   type        = string
-  default     = "openvpn-wif-pool"
+  default     = null
 }
 
 variable "google_wif_provider_id" {
-  description = "Workload Identity Pool *provider* ID for the AWS provider."
+  description = <<-EOT
+    Workload Identity Pool *provider* ID for the AWS provider. Defaults to
+    `aws-<service_name>-<random>` so multiple deployments can share a GCP project
+    without colliding. Set to pin a fixed name. Pre-10.0.0 default was `aws-openvpn`.
+  EOT
   type        = string
-  default     = "aws-openvpn"
+  default     = null
 }
 
 variable "google_directory_reader_sa_id" {
-  description = "account_id (local part) of the keyless directory-reader service account."
+  description = <<-EOT
+    account_id (local part) of the keyless directory-reader service account.
+    Defaults to `<service_name>-dir-reader-<random>` so multiple deployments can
+    share a GCP project without colliding. Set to pin a fixed name -- recreating
+    this SA mints a new client id and requires re-authorizing domain-wide
+    delegation. Pre-10.0.0 default was `openvpn-dir-reader`.
+  EOT
   type        = string
-  default     = "openvpn-dir-reader"
+  default     = null
 }
 
 # ---------------------------------------------------------------------------
