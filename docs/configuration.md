@@ -118,7 +118,7 @@ Because it always manages GCP resources, the module **requires a configured
 
 | Service account | Created by | Used by | Purpose |
 |-----------------|------------|---------|---------|
-| directory-reader (`openvpn-dir-reader`) | **this module** (Terraform) | the OpenVPN instance | read the Workspace directory, keyless via WIF |
+| directory-reader (`<service_name>-dir-reader-<random>`) | **this module** (Terraform) | the OpenVPN instance | read the Workspace directory, keyless via WIF |
 | CI runner (your choice of name) | **you**, out of band (see [CI/CD](#in-cicd)) | GitHub Actions | let Terraform authenticate to GCP in CI |
 
 ### 1. OAuth client (portal login)
@@ -314,9 +314,26 @@ Inputs:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `google_workspace_admin_emails` | *required* | List of **real** Workspace admins the VPN impersonates to read the directory — one per Workspace tenant. |
-| `google_wif_pool_id` | `openvpn-wif-pool` | Workload identity pool ID. |
-| `google_wif_provider_id` | `aws-openvpn` | Workload identity pool *provider* ID. |
-| `google_directory_reader_sa_id` | `openvpn-dir-reader` | Account ID of the keyless directory-reader service account. |
+| `google_wif_pool_id` | `<service_name>-wif-pool-<random>` | Workload identity pool ID. Set to pin a fixed name. |
+| `google_wif_provider_id` | `aws-<service_name>-<random>` | Workload identity pool *provider* ID. Set to pin a fixed name. |
+| `google_directory_reader_sa_id` | `<service_name>-dir-reader-<random>` | Account ID of the keyless directory-reader SA. Set to pin a fixed name. |
+
+!!! info "Two deployments can share one GCP project"
+    These three names default to a **random, stable-in-state suffix**, so two
+    OpenVPN deployments — even both with `service_name = "openvpn"` — create their
+    WIF resources in the same GCP project without colliding. The suffix is
+    generated once and never churns.
+
+    **Upgrading an existing (pre-10.0.0) deployment:** the old fixed defaults were
+    `openvpn-wif-pool`, `aws-openvpn`, `openvpn-dir-reader`. To avoid recreating
+    the SA (a new SA gets a new client ID → you'd have to re-authorize
+    domain-wide delegation), **pin the old names** on the existing deployment:
+
+    ```hcl
+    google_wif_pool_id            = "openvpn-wif-pool"
+    google_wif_provider_id        = "aws-openvpn"
+    google_directory_reader_sa_id = "openvpn-dir-reader"
+    ```
 
 Outputs:
 
