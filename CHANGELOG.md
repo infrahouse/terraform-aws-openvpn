@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [9.0.0] - 2026-07-22
+
+### Features
+
+- Revoke deactivated users across multiple Google Workspaces
+
 ## [8.0.0] - 2026-07-22
 
 ### Bug Fixes
