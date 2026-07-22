@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [8.0.0] - 2026-07-22
+
+### Bug Fixes
+
+- Bump ecs module to 8.3.1 to fix portal destroy deadlock
+
+### Documentation
+
+- Add activation runbook for Google directory revocation
+
+### Features
+
+- Make Google Workspace directory revocation unconditional
+
 ## [7.0.0] - 2026-07-21
 
 ### Bug Fixes
