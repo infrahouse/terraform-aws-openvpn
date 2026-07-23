@@ -195,7 +195,7 @@ provider "google" {
 
 module "openvpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "9.0.0"
+  version = "10.0.0"
   providers = {
     aws     = aws
     aws.dns = aws
