@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [10.0.0] - 2026-07-23
+
+### Features
+
+- Unique-by-default names for the WIF GCP resources
+
 ## [9.0.0] - 2026-07-22
 
 ### Features
