@@ -114,11 +114,14 @@ This section describes how to test module changes in a development environment b
    pre-commit install
    ```
 
-   Hooks run automatically on `git commit`:
+   Hooks run automatically on `git commit`
+   (see [.pre-commit-config.yaml](.pre-commit-config.yaml)):
    - `terraform fmt` - Format Terraform files
    - `terraform-docs` - Update README.md documentation
-   - `checkov` - Security scanning
-   - Python linting (if applicable)
+   - `tflint` - Terraform linting
+
+   The repo hook installed by `make install-hooks` is preserved as
+   `pre-commit.legacy` and still runs after the pre-commit hooks.
 
 ### Running Tests
 

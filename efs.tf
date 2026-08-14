@@ -40,6 +40,7 @@ resource "aws_vpc_security_group_ingress_rule" "efs_icmp" {
   )
 }
 
+#tfsec:ignore:aws-vpc-no-public-egress-sgr
 resource "aws_vpc_security_group_egress_rule" "efs" {
   description       = "Allow all outbound traffic from EFS (EFS-initiated connections for metadata and management)"
   security_group_id = aws_security_group.efs.id

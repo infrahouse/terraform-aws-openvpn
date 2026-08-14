@@ -1,5 +1,17 @@
 # terraform-aws-openvpn
 
+[![Need Help?](https://img.shields.io/badge/Need%20Help%3F-Contact%20Us-0066CC)](https://infrahouse.com/contact)
+[![Docs](https://img.shields.io/badge/docs-github.io-blue)](https://infrahouse.github.io/terraform-aws-openvpn/)
+[![Registry](https://img.shields.io/badge/Terraform-Registry-purple?logo=terraform)](https://registry.terraform.io/modules/infrahouse/openvpn/aws/latest)
+[![Release](https://img.shields.io/github/release/infrahouse/terraform-aws-openvpn.svg)](https://github.com/infrahouse/terraform-aws-openvpn/releases/latest)
+[![Security](https://img.shields.io/github/actions/workflow/status/infrahouse/terraform-aws-openvpn/vuln-scanner-pr.yml?label=Security)](https://github.com/infrahouse/terraform-aws-openvpn/actions/workflows/vuln-scanner-pr.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+[![AWS EC2](https://img.shields.io/badge/AWS-EC2-orange?logo=amazonec2)](https://aws.amazon.com/ec2/)
+[![AWS ECS](https://img.shields.io/badge/AWS-ECS-orange?logo=amazonecs)](https://aws.amazon.com/ecs/)
+[![AWS EFS](https://img.shields.io/badge/AWS-EFS-orange?logo=amazonefs)](https://aws.amazon.com/efs/)
+[![Google OAuth](https://img.shields.io/badge/Google-OAuth%202.0-4285F4?logo=google)](https://developers.google.com/identity/protocols/oauth2)
+
 The [openvpn module](https://registry.terraform.io/modules/infrahouse/openvpn/aws/latest) deploys 
 an OpenVPN server with Google OAuth 2.0 authentication.
 
@@ -12,6 +24,35 @@ and generates an OpenVPN profile for them.
 
 You should place the OpenVPN server in public subnets in your AWS environment 
 so authorized users can access resources in private subnets.
+
+## Why This Module?
+
+- **No per-seat licensing.** Runs the OpenVPN Community Edition, unlike OpenVPN
+  Access Server which is licensed per concurrent connection.
+- **Flat, predictable cost.** A fixed EC2 + NLB + EFS bill instead of AWS Client
+  VPN's per-association and per-connection-hour pricing, which grows with every
+  user and subnet.
+- **No certificate management.** Users sign in with Google and download their own
+  profile from the portal — nobody hand-issues or distributes `.ovpn` files.
+- **Offboarding is automatic.** When a user is suspended in Google Workspace,
+  their VPN certificates are revoked — keylessly, via Workload Identity
+  Federation, with no service-account key at rest.
+- **Production-ready out of the box.** Auto Scaling, Network Load Balancer,
+  encrypted shared storage, CloudWatch alarms, and DNS wiring are all included.
+
+## Features
+
+- OpenVPN server in an Auto Scaling group behind a Network Load Balancer
+- Web portal (ECS) where users authenticate with Google OAuth 2.0 and download
+  their VPN profile
+- Support for users from multiple Google Workspace domains (version 4.0.0+)
+- Automatic certificate revocation for suspended Workspace users via keyless
+  Workload Identity Federation
+- Encrypted EFS for configuration shared across instances, with optional AWS
+  Backup plans
+- Route 53 DNS records for the VPN endpoint and the portal
+- Custom routes pushed to VPN clients
+- CloudWatch alarms with email and SNS notifications
 
 ## Quick start
 
@@ -88,6 +129,17 @@ an explicit `providers` map), set `google_workspace_admin_emails` to a real
 Workspace admin per tenant, `terraform apply`, then authorize domain-wide
 delegation once in **each** Workspace console (`sudo /opt/openvpn-wif/verify-wif.sh`
 on an instance prints the exact Client ID + scope to paste).
+
+## Examples
+
+Complete, working configurations live in the [`examples/`](examples/) directory:
+
+- [`examples/basic`](examples/basic) — the minimum configuration required to
+  deploy the VPN: network, DNS zone, and the module with only its required
+  inputs.
+
+More patterns (custom routes, multiple domains, scaling, backups) are described
+in the [examples documentation](https://infrahouse.github.io/terraform-aws-openvpn/examples/).
 
 ## Contributing
 
