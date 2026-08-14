@@ -3,6 +3,10 @@
 Common deployment patterns. All examples assume the two providers from
 [Getting Started](getting-started.md#provider-configuration) are configured.
 
+A complete, deployable configuration (network, DNS zone, and the module) lives in
+[`examples/basic`](https://github.com/infrahouse/terraform-aws-openvpn/tree/main/examples/basic)
+in the repository.
+
 ## Minimal production deployment
 
 ```hcl

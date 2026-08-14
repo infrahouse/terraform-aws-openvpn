@@ -2,6 +2,8 @@ locals {
   name_prefix = substr("openvpn", 0, 6)
 }
 
+# The NLB is the public VPN entry point — internet exposure is the whole purpose.
+#tfsec:ignore:aws-elb-alb-not-public
 resource "aws_lb" "openvpn" {
   name_prefix                      = local.name_prefix
   load_balancer_type               = "network"

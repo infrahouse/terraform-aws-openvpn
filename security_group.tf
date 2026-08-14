@@ -79,6 +79,8 @@ resource "aws_vpc_security_group_ingress_rule" "icmp" {
 }
 
 # Allow all outbound traffic
+# VPN instances forward client traffic to arbitrary destinations, so egress cannot be restricted.
+#tfsec:ignore:aws-vpc-no-public-egress-sgr
 resource "aws_vpc_security_group_egress_rule" "default" {
   description       = "Allow all outbound traffic from ASG instances"
   security_group_id = aws_security_group.openvpn.id

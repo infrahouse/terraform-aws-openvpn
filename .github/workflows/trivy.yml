@@ -1,0 +1,26 @@
+---
+# Terraform misconfiguration scanning with Trivy (successor of the deprecated
+# tfsec). Intentional findings are suppressed inline with justified
+# #tfsec:ignore / #trivy:ignore comments next to the resources.
+name: Trivy Scan
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          exit-code: '1'
+          # test_data is a test fixture, site is generated MkDocs output,
+          # portal is the Docker image source scanned by its own pipeline.
+          skip-dirs: test_data,site,portal
