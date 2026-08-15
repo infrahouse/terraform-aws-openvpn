@@ -22,7 +22,7 @@ connect to reach private resources inside your VPC — no manual certificate han
 ```hcl
 module "openvpn" {
   source  = "registry.infrahouse.com/infrahouse/openvpn/aws"
-  version = "10.0.0"
+  version = "10.1.0"
   providers = {
     aws     = aws
     aws.dns = aws
