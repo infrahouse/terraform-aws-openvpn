@@ -50,7 +50,7 @@ data "aws_vpc" "selected" {
 
 # The AMI is pinned by exact image-id (Canonical's Ubuntu Pro or a user-supplied
 # override), so an owners filter would add nothing and cannot be known for overrides.
-#trivy:ignore:avd-aws-0344
+#trivy:ignore:aws-ami-ensure-ami-has-owners
 data "aws_ami" "selected" {
   filter {
     name = "image-id"
