@@ -4,6 +4,12 @@
 framework:
   - terraform
 
+# Paths not scanned
+skip-path:
+  # Demo configurations with placeholder resources (e.g. example.com zone
+  # without DNSSEC/query logging), not module code
+  - examples
+
 # Suppress specific checks
 skip-check:
   # CKV_TF_1: Module sources use version pins from private registry (better than commit hashes)
