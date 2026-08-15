@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [10.1.0] - 2026-08-15
+
+### Bug Fixes
+
+- Unbreak PR CI — checkov skip-path for examples/, trivy-action tag
+- Use long-form check ID for the AMI-owners trivy suppression
+
+### Miscellaneous Tasks
+
+- Implement Terraform Module Requirements ([#69](https://github.com/infrahouse/terraform-aws-openvpn/issues/69))
+- Upgrade dependencies from the Renovate dashboard ([#30](https://github.com/infrahouse/terraform-aws-openvpn/issues/30))
+
 ## [10.0.0] - 2026-07-23
 
 ### Features
