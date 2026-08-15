@@ -1,14 +1,15 @@
-black ~= 26.3.1
-build ~= 0.10
+black ~= 26.5.1
+build ~= 1.5
 bump2version ~= 1.0
-isort ~= 5.12
-mdformat ~= 0.7
-mdformat-gfm ~= 0.3
-pylint ~= 2.17
+isort ~= 8.0
+mdformat ~= 1.0
+mdformat-gfm ~= 1.0
+pylint ~= 4.0
 pytest ~= 9.0
-pytest-cov ~= 4.1
+pytest-cov ~= 7.1
 pytest-timeout ~= 2.1
-sphinx ~= 6.1
+# 9.1+ requires Python >= 3.12; ~= 9.0 keeps the v9 line installable on 3.11 dev envs
+sphinx ~= 9.0
 tox ~= 4.4
-twine ~= 4.0
+twine ~= 7.0
 yamllint ~= 1.29
