@@ -34,6 +34,30 @@ data "aws_iam_policy_document" "instance_permissions" {
       variable = "ec2:ResourceTag/aws:autoscaling:groupName"
     }
   }
+  # profile::boot_security_upgrade removes this tag once security updates are
+  # applied, so Inspector's first scan sees a patched host. Scoped three ways:
+  # only this tag key, only instances, and only instances in this ASG.
+  # local.asg_name rather than aws_autoscaling_group.openvpn.name on purpose:
+  # the resource reference would order this grant after the ASG has already
+  # started launching tagged instances.
+  statement {
+    actions = [
+      "ec2:DeleteTags",
+    ]
+    resources = [
+      "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*"
+    ]
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "aws:TagKeys"
+      values   = ["InspectorEc2Exclusion"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/aws:autoscaling:groupName"
+      values   = [local.asg_name]
+    }
+  }
   statement {
     actions = [
       "autoscaling:SetInstanceHealth",

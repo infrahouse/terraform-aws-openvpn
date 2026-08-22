@@ -153,6 +153,15 @@ resource "aws_autoscaling_group" "openvpn" {
     propagate_at_launch = true
     value               = "openvpn"
   }
+  # Keeps Inspector from scanning the instance until profile::boot_security_upgrade
+  # has applied pending security updates and removed this tag. See
+  # .claude/plans/inspector-exclusion-tag.md -- REQUIRES the ec2:DeleteTags
+  # statement in iam.tf, or the instance is excluded from Inspector forever.
+  tag {
+    key                 = "InspectorEc2Exclusion"
+    propagate_at_launch = true
+    value               = "true"
+  }
   dynamic "tag" {
     for_each = merge(
       local.default_module_tags,
