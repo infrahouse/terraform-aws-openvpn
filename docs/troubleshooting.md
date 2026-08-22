@@ -76,6 +76,28 @@ the replacement itself.
 - Confirm the instance mounted EFS (`efs_dns_name` / `efs_file_system_id` outputs).
 - If EFS itself was recreated, restore from AWS Backup (enabled by default).
 
+## Instance is invisible to AWS Inspector
+
+**Symptom:** An OpenVPN instance still carries the `InspectorEc2Exclusion` tag after it finished
+bootstrapping, so Inspector never scans it.
+
+**Cause:** The ASG tags instances at launch and Puppet (`profile::boot_security_upgrade`) removes the tag
+once security updates are applied. Removal is best effort and never fails a Puppet run, so a missing
+`ec2:DeleteTags` permission leaves the tag — and the instance — in place silently.
+
+**Fix:**
+
+- Confirm the tag is actually still there:
+  ```bash
+  aws ec2 describe-tags --filters Name=resource-id,Values=i-...
+  ```
+- Look for the removal attempt in the instance's `/var/log/cloud-init-output.log`:
+    - `removed InspectorEc2Exclusion from i-...` — the API call succeeded
+    - `could not remove ... (no ec2:DeleteTags?)` — the instance profile is missing the permission
+- The module grants `ec2:DeleteTags` scoped to that tag key on instances in its own ASG. If the instance
+  was launched by an older version of the module, replace it — `propagate_at_launch` tags are only applied
+  at launch, so the fix takes effect on the next instance refresh.
+
 ## Google directory revocation (WIF) fails
 
 Run `sudo /opt/openvpn-wif/verify-wif.sh` on an OpenVPN instance. It tests the

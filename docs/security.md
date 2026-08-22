@@ -90,6 +90,24 @@
    - Test EFS restore process
    - Maintain runbook for common security events
 
+## Vulnerability Patching
+
+1. **Instances are patched before their first Inspector scan**
+   - The ASG tags every instance `InspectorEc2Exclusion` at launch, which keeps AWS Inspector from
+     scanning it
+   - Puppet (`profile::boot_security_upgrade`) applies pending security updates during bootstrap, then
+     removes the tag, so Inspector's first scan sees an already-patched host
+   - Without this, Inspector opens a finding on a freshly launched instance and closes it on the next
+     `unattended-upgrades` run — but by then it has reopened the vulnerability group, and a group old
+     enough to be reopened that way breaks the remediation SLA
+
+2. **The exclusion tag is fail-open**
+   - An instance that launches tagged and never has the tag removed stays invisible to Inspector
+   - Removal needs `ec2:DeleteTags`, which the module grants on the instance profile — scoped to that one
+     tag key, on instances in its own Auto Scaling group
+   - See [Troubleshooting](troubleshooting.md#instance-is-invisible-to-aws-inspector) if an instance still
+     carries the tag after bootstrap
+
 ## Compliance Considerations
 
 1. **ISO 27001 / SOC 2**

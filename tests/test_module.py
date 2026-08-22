@@ -19,42 +19,6 @@ from tests.conftest import (
 from tests.wif_helpers import google_credentials, verify_google_wif
 
 
-def wait_for_puppet(instance, timeout=600, poll_interval=10):
-    """
-    Wait for Puppet bootstrap to complete on an instance.
-
-    Puppet completion is indicated by the marker file /var/run/puppet-done.
-
-    :param instance: EC2 instance to check
-    :param timeout: Maximum time to wait in seconds (default: 600 = 10 minutes)
-    :param poll_interval: Time between checks in seconds (default: 10)
-    :raises AssertionError: If Puppet does not complete within timeout
-    """
-    LOG.info("Waiting for Puppet to complete bootstrap (up to %d seconds)...", timeout)
-
-    for attempt in range(timeout // poll_interval):
-        exit_code, stdout, stderr = instance.execute_command(
-            "test -f /var/run/puppet-done && echo 'done' || echo 'not done'"
-        )
-
-        if exit_code == 0 and stdout.strip() == "done":
-            LOG.info(
-                f"✓ Puppet bootstrap completed (after {(attempt + 1) * poll_interval} seconds)"
-            )
-            return
-
-        LOG.info(
-            f"   Puppet still running (attempt {attempt + 1}/{timeout // poll_interval})..."
-        )
-        time.sleep(poll_interval)
-
-    raise AssertionError(
-        f"Puppet bootstrap did not complete after {timeout} seconds. "
-        f"Marker file /var/run/puppet-done not found. "
-        f"Instance may still be bootstrapping or bootstrap failed."
-    )
-
-
 def verify_cloudwatch_logging(instance, log_group_name, boto3_session, aws_region):
     """
     Verify CloudWatch logging infrastructure created by this Terraform module.
@@ -213,6 +177,47 @@ def verify_cloudwatch_logging(instance, log_group_name, boto3_session, aws_regio
     LOG.info("  - Instance has IAM permissions to create log streams")
     LOG.info("  - Instance has IAM permissions to write log events")
     LOG.info("  - Logs are readable via CloudWatch API")
+
+
+def verify_inspector_exclusion_tag_removed(instance):
+    """
+    Verify the InspectorEc2Exclusion tag is gone from a bootstrapped instance.
+
+    The ASG tags instances with InspectorEc2Exclusion at launch and
+    profile::boot_security_upgrade removes it once security updates are applied,
+    so Inspector's first scan sees an already-patched host. A tag that survives
+    means the instance stays invisible to Inspector forever.
+
+    Assumes the instance finished bootstrapping (see EC2Instance.wait_for_bootstrap).
+
+    :param instance: EC2 instance to check
+    :raises AssertionError: If the tag is still present
+    """
+    LOG.info("Checking InspectorEc2Exclusion is gone from %s...", instance.instance_id)
+
+    # EC2 tag reads are eventually consistent and EC2Instance caches its describe
+    # call for 10 seconds, so poll on a longer interval than that TTL.
+    max_wait = 60
+    poll_interval = 15
+
+    for _ in range(max_wait // poll_interval):
+        if "InspectorEc2Exclusion" not in instance.tags:
+            LOG.info("✓ InspectorEc2Exclusion removed from %s", instance.instance_id)
+            return
+        time.sleep(poll_interval)
+
+    # Still tagged. The likely cause is a missing or mis-scoped ec2:DeleteTags
+    # statement -- boot-security-upgrade.sh logs that case and exits 0.
+    _, cout, cerr = instance.execute_command(
+        "sudo grep -i InspectorEc2Exclusion /var/log/cloud-init-output.log",
+        execution_timeout=120,
+    )
+    pytest.fail(
+        f"InspectorEc2Exclusion still present on {instance.instance_id} {max_wait} seconds after "
+        f"the instance bootstrapped -- it would be invisible to Inspector forever. "
+        f"Check the ec2:DeleteTags statement in iam.tf.\n"
+        f"----- cloud-init-output.log -----\n{cout}{cerr}"
+    )
 
 
 @pytest.mark.parametrize("aws_provider_version", ["~> 6.0"], ids=["aws6"])
@@ -377,8 +382,10 @@ def test_module(
         assert len(instances) > 0, "No instances found in ASG"
         instance = instances[0]
 
-        # Wait for Puppet bootstrap to complete
-        wait_for_puppet(instance)
+        # Wait for cloud-init and the Puppet bootstrap to complete
+        instance.wait_for_bootstrap()
+
+        verify_inspector_exclusion_tag_removed(instance)
 
         # Test CloudWatch Logging Configuration
         log_group_name = tf_output["cloudwatch_log_group_name"]["value"]
