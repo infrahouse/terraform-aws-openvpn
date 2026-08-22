@@ -382,8 +382,11 @@ def test_module(
         assert len(instances) > 0, "No instances found in ASG"
         instance = instances[0]
 
-        # Wait for cloud-init and the Puppet bootstrap to complete
-        instance.wait_for_bootstrap()
+        # Wait for cloud-init and the Puppet bootstrap to complete.
+        # The 600s default is not enough for this module: ih-puppet applies the
+        # catalog twice and the first apply alone measured ~506s in CI, mostly
+        # package installs plus the boot security upgrade.
+        instance.wait_for_bootstrap(timeout_seconds=1800)
 
         verify_inspector_exclusion_tag_removed(instance)
 
