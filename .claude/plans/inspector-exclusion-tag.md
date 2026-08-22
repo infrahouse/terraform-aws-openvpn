@@ -132,6 +132,10 @@ not "this module's EC2 footprint is done".
   will not fight Puppet's deletion, and deleting a per-instance tag does **not** show as Terraform drift on
   the ASG resource. Tag/untag repeats per launch, which is correct.
 - **`max_instance_lifetime = 90 days`** bounds how long a stale, never-reconciled instance can persist.
+- **`wait_for_bootstrap()` needs `timeout_seconds=1800` here.** The 600s default is not enough for this
+  module: ih-puppet applies the catalog twice and the first apply alone measured ~506s in CI. The old
+  `wait_for_puppet()` nominally used 600s too, but each iteration was a sleep *plus* a full SSM round-trip,
+  so its real budget was far larger. `wait_for_bootstrap()` uses a monotonic deadline and means what it says.
 - **Checkov/Trivy:** no new suppression expected. `.checkov.yml` does not skip CKV_AWS_355/356 and the
   existing wildcard-resource statements already pass; scoping to the instance ARN makes it moot anyway.
 
