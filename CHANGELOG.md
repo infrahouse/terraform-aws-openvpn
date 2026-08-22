@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [10.2.0] - 2026-08-22
+
+### Bug Fixes
+
+- Give wait_for_bootstrap 1800s on openvpn instances
+
+### Features
+
+- Exclude openvpn servers from Inspector until Puppet patches them
+
 ## [10.1.0] - 2026-08-15
 
 ### Bug Fixes
