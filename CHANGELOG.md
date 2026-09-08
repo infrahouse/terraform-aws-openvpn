@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [10.2.1] - 2026-09-08
+
+### Bug Fixes
+
+- Bump cloud-init to 2.4.1 to pin json gem below 3.0
+
 ## [10.2.0] - 2026-08-22
 
 ### Bug Fixes
